@@ -1,0 +1,85 @@
+---
+title: "CMR Pennsylvania"
+format: html
+editor: visual
+---
+
+## Load Packages
+```{r}
+
+if (!require(librarian)){
+  install.packages("librarian")
+  library(librarian)
+}
+
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked)
+
+```
+
+## Connect to `survey_data` schema in `ribbitr` database
+```{r}
+
+tryCatch({
+    drv <- dbDriver("Postgres")
+    print("Connecting to Database…")
+    connection <- dbConnect(drv,
+                 dbname = Sys.getenv("aws_dbname"),
+                 host = Sys.getenv("aws_host"),
+                 port = Sys.getenv("aws_port"),
+                 user = Sys.getenv("aws_user"),
+                 password = Sys.getenv("aws_password"),
+                 timezone=NULL)
+    print("Database Connected!")
+    },
+    error=function(cond) {
+            print("Unable to connect to Database.")
+    })
+
+#search path
+dbExecute(connection, "set search_path to survey_data")
+
+
+
+```
+
+## Query 2022 and new CMR Penn data
+```{r}
+
+cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
+          c.species_capture, c.capture_type
+          from region r
+          join site s on r.region_id = s.region_id 
+          join visit v on s.site_id = v.site_id 
+          join survey s2 on v.visit_id = s2.visit_id 
+          join capture c on s2.survey_id = c.survey_id
+          where r.region = 'pennsylvania'
+          and v.date > '2022-01-01';"
+
+
+raw_data <- dbGetQuery(connection, cmr_q) %>% 
+  select(!c(region, survey_time, duration_minutes))
+
+
+```
+
+## Clean up species list
+```{r}
+
+clean_up <- raw_data %>% 
+  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", "rana_clamitans", "rana_pipiens")) %>% 
+  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
+  group_by(date, site, species_capture, capture_type) %>% 
+  summarise(n = n()) %>% 
+  ungroup()
+
+```
+
+## Unmarked table formating 
+```{r}
+
+unmarked_table <- clean_up %>%
+  filter(capture_type == "new") %>% 
+  select(site, species_capture, n)
+
+```
+
