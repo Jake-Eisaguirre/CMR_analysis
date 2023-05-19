@@ -12,7 +12,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here)
 
 ```
 
@@ -79,7 +79,13 @@ clean_up <- raw_data %>%
 
 unmarked_table <- clean_up %>%
   filter(capture_type == "new") %>% 
-  select(site, species_capture, n)
+  select(site, date, species_capture, n) 
+
+bull_frog_unmarked <- unmarked_table %>% 
+  filter(species_capture == "rana_catesbeiana") %>% 
+  pivot_wider(names_from = c("date"), values_from = c("n")) %>% 
+  replace(is.na(.), 0) %>% 
+  select(!species_capture)
 
 ```
 
