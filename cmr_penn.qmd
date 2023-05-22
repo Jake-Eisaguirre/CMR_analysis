@@ -5,6 +5,7 @@ editor: visual
 ---
 
 ## Load Packages
+
 ```{r}
 
 if (!require(librarian)){
@@ -12,11 +13,12 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, reshape2, lubridate)
 
 ```
 
 ## Connect to `survey_data` schema in `ribbitr` database
+
 ```{r}
 
 tryCatch({
@@ -43,6 +45,7 @@ dbExecute(connection, "set search_path to survey_data")
 ```
 
 ## Query 2022 and new CMR Penn data
+
 ```{r}
 
 cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
@@ -55,18 +58,34 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           where r.region = 'pennsylvania'
           and v.date > '2022-01-01';"
 
-
 raw_data <- dbGetQuery(connection, cmr_q) %>% 
-  select(!c(region, survey_time, duration_minutes))
+  select(!c(region, survey_time, duration_minutes)) %>% 
+  mutate(date = sort(date))
+
+
+
+# Confirmed we had no visits with out any captures #
+visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
+                from region r
+                join site s on r.region_id = s.region_id 
+                join visit v on s.site_id = v.site_id 
+                where r.region = 'pennsylvania'
+                and v.date > '2022-01-01';"
+
+raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
+  mutate(date = sort(date))
+  
 
 
 ```
 
 ## Clean up species list
+
 ```{r}
 
 clean_up <- raw_data %>% 
-  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", "rana_clamitans", "rana_pipiens")) %>% 
+  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+                                "rana_clamitans", "rana_pipiens")) %>% 
   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
   group_by(date, site, species_capture, capture_type) %>% 
   summarise(n = n()) %>% 
@@ -74,7 +93,8 @@ clean_up <- raw_data %>%
 
 ```
 
-## Unmarked table formating 
+## Unmarked table formating
+### Bull Frog
 ```{r}
 
 unmarked_table <- clean_up %>%
@@ -83,9 +103,43 @@ unmarked_table <- clean_up %>%
 
 bull_frog_unmarked <- unmarked_table %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
-  pivot_wider(names_from = c("date"), values_from = c("n")) %>% 
-  replace(is.na(.), 0) %>% 
-  select(!species_capture)
+  select(!species_capture) 
+
+
+bull_frog_unmarked_visits <- bull_frog_unmarked %>% 
+  group_by(site) %>% 
+  mutate(n_visit = 1:n(),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  replace(is.na(.), 0)
+
 
 ```
+
+## Makred table formatig
+### Bull Frog
+```{r}
+
+marked_table <- clean_up %>% 
+  filter(capture_type == "recapture") %>% 
+  select(site, date, species_capture, n)
+
+bull_frog_marked <- marked_table %>% 
+  filter(species_capture == "rana_catesbeiana") %>% 
+  select(!species_capture) 
+
+
+bull_frog_marked_visits <- bull_frog_marked %>% 
+  group_by(site) %>% 
+  mutate(n_visit = 1:n(),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  replace(is.na(.), 0)
+
+```
+
 
