@@ -112,35 +112,40 @@ bull_frog_visits <- bull_frog %>%
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
   select(!date) %>% 
   ungroup() %>%
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
-  replace(is.na(.), 0)
+  pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
+  add_row(site = "phelps_pond", capture_type = "recapture") %>%
+  replace(is.na(.), 0) 
 
 
 
 ```
 
-## Makred table formatig
-### Bull Frog
+
+## Table formating multivariate n-mixutre
 ```{r}
 
-marked_table <- clean_up %>% 
-  filter(capture_type == "recapture") %>% 
-  select(site, date, species_capture, n)
+bull_frog_m_n_mixture <-  bull_frog_visits %>% 
+  filter(capture_type == "new") %>% 
+  select(!capture_type)
 
-bull_frog_marked <- marked_table %>% 
-  filter(species_capture == "rana_catesbeiana") %>% 
-  select(!species_capture) 
+bull_frog_m_n_mixture$captureHistory <- paste(bull_frog_m_n_mixture$visit_1, bull_frog_m_n_mixture$visit_2,
+                                              bull_frog_m_n_mixture$visit_3, bull_frog_m_n_mixture$visit_4,
+                                              bull_frog_m_n_mixture$visit_5, bull_frog_m_n_mixture$visit_6,
+                                              sep = "")
 
 
-bull_frog_marked_visits <- bull_frog_marked %>% 
-  group_by(site) %>% 
-  mutate(n_visit = 1:n(),
-         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
-  select(!date) %>% 
-  ungroup() %>%
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
-  replace(is.na(.), 0)
+a <- expand.grid(0:1, 0:1, 0:1, 0:1, 0:1, 0:1)
+
+bull_frog_m_n_mixture$captureHistory <- factor(bull_frog_m_n_mixture$captureHistory,
+                                               levels = c()
+
+alfl$captureHistory <- paste(alfl$interval1, alfl$interval2, alfl$interval3, sep="")
+alfl$captureHistory <- factor(alfl$captureHistory,
+    levels=c("001", "010", "011", "100", "101", "110", "111"))
+## Don't do this:
+#levels(alfl$id) <- rownames(alfl.covs)
+alfl$id <- factor(alfl$id, levels=rownames(alfl.covs))
+
 
 ```
-
 
