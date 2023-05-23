@@ -113,8 +113,7 @@ bull_frog_visits <- bull_frog %>%
   select(!date) %>% 
   ungroup() %>%
   pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
-  add_row(site = "phelps_pond", capture_type = "recapture") %>%
-  replace(is.na(.), 0) 
+  add_row(site = "phelps_pond", capture_type = "recapture")
 
 
 
