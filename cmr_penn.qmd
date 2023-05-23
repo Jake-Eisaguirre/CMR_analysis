@@ -59,7 +59,8 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           and v.date > '2022-01-01';"
 
 raw_data <- dbGetQuery(connection, cmr_q) %>% 
-  select(!c(region, survey_time, duration_minutes))
+  select(!c(region, survey_time, duration_minutes)) %>% 
+  arrange(date)
 
 
 
@@ -72,7 +73,7 @@ visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
                 and v.date > '2022-01-01';"
 
 raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
-  mutate(date = sort(date))
+  arrange(date)
   
 
 
@@ -92,12 +93,13 @@ clean_up <- raw_data %>%
 
 ```
 
-## Unmarked table formating
+## Table formating
 ### Bull Frog
 ```{r}
 
 bull_table <- clean_up %>% 
   select(site, date, species_capture, n, capture_type) 
+
 
 bull_frog <- bull_table %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
