@@ -48,11 +48,12 @@ dbExecute(connection, "set search_path to survey_data")
 
 ```{r}
 
+# 30 unique dates for visits
 cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
           c.species_capture, c.capture_type
           from region r
           join site s on r.region_id = s.region_id 
-          join visit v on s.site_id = v.site_id 
+          full join visit v on s.site_id = v.site_id 
           join survey s2 on v.visit_id = s2.visit_id 
           join capture c on s2.survey_id = c.survey_id
           where r.region = 'pennsylvania'
@@ -73,40 +74,195 @@ visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
                 and v.date > '2022-01-01';"
 
 raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
-  arrange(date)
-  
+  arrange(date) %>% 
+  select(site, date)
 
+viz <- raw_visits %>% 
+  group_by(site) %>% 
+  summarise(n = n())
+
+ggplot(data = viz) +
+  geom_col(aes(x=site, y = n))
 
 ```
 
-## Clean up species list
+## Clean up species list with counts
 
 ```{r}
+
+clean_up_dates <- raw_visits %>% 
+  select(site, date) %>% 
+  group_by(site, date) %>% 
+  distinct() %>% 
+  ungroup() 
 
 clean_up <- raw_data %>% 
   filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
-                                "rana_clamitans", "rana_pipiens")) %>% 
+                                "rana_clamitans")) %>% 
   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
-  group_by(date, site, species_capture, capture_type) %>% 
+  group_by(date, site, species_capture) %>% 
   summarise(n = n()) %>% 
   ungroup()
 
+  
+
+  
+
+zero_dates <- raw_visits %>% 
+  select(site, date) %>% 
+  group_by(site, date) %>% 
+  distinct() %>% 
+  anti_join(clean_up_dates, by = c("site", "date")) %>% 
+  mutate(species_capture = "",
+         capture_type = "new",
+         n = "")
+
+clean_up <- mid_clean_up %>% 
+  plyr::rbind.fill(zero_dates) %>% 
+  complete(site, species_capture, fill = list(frequency = 0))
+
+
+
+
+zero_dates_bull <- raw_visits %>% 
+  select(site, date) %>% 
+  group_by(site, date) %>% 
+  distinct() %>% 
+  anti_join(clean_up_dates, by = c("site", "date")) %>% 
+  mutate(species_capture = "rana_catesbeiana",
+         n = 0,
+         capture_type = "new")
+
+zero_dates_peep <- raw_visits %>% 
+  select(site, date) %>% 
+  group_by(site, date) %>% 
+  distinct() %>% 
+  anti_join(clean_up_dates, by = c("site", "date")) %>% 
+  mutate(species_capture = "pseudacris_crucifer",
+         n = 0,
+         capture_type = "new")
+
+zero_dates_green <- raw_visits %>% 
+  select(site, date) %>% 
+  group_by(site, date) %>% 
+  distinct() %>% 
+  anti_join(clean_up_dates, by = c("site", "date")) %>% 
+  mutate(species_capture = "pseudacris_crucifer",
+         n = 0,
+         capture_type = "new")
+
+
+clean_up <- plyr::rbind.fill(mid_clean_up, zero_dates_green,zero_dates_peep, zero_dates_bull)
+
+
+  
+
 ```
 
-## Table formating
-### Bull Frog
+## rana_catesbeiana
+### Table formattig
 ```{r}
 
-bull_table <- clean_up %>% 
-  select(site, date, species_capture, n, capture_type) 
-
-
-bull_frog <- bull_table %>% 
+bull_frog_visits <- clean_up %>% 
+  select(site, date, species_capture, n) %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
-  select(!species_capture) 
+  select(!species_capture) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
+  #add_row(site = "phelps_pond", capture_type = "recapture") %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .)))
 
 
-bull_frog_visits <- bull_frog %>% 
+
+
+
+```
+
+### n-mixture unmakred models
+```{r}
+
+bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
+  ungroup() %>% 
+  #filter(capture_type == "new") %>% 
+  select(!c(site)) 
+
+# %>% 
+#   mutate(N = rowSums(across(c(visit_1:visit_6)))) %>% 
+#   relocate(N, .before = visit_1)
+
+umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
+
+summary(umf)
+
+fm1 <- pcount(~1 ~1, data = umf)
+
+backTransform(fm1, "state") 
+
+#backTransform(fm1, "det")
+
+```
+
+## pseudacris_crucifer
+### Table formattig
+```{r}
+
+peep_frog_visits <- clean_up %>% 
+  select(site, date, species_capture, n) %>% 
+  filter(species_capture == "pseudacris_crucifer") %>% 
+  select(!species_capture) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .)))
+
+
+
+```
+
+### n-mixture unmakred models
+```{r}
+peep_unmarked_nmixture <- peep_frog_visits %>% 
+  ungroup() %>% 
+  #filter(capture_type == "new") %>% 
+  select(!c(site)) 
+
+# %>% 
+#   mutate(N = rowSums(across(c(visit_1:visit_6)))) %>% 
+#   relocate(N, .before = visit_1)
+
+umf <- unmarkedFramePCount(y = peep_unmarked_nmixture)
+
+summary(umf)
+
+fm1 <- pcount(~1 ~1, data = umf)
+
+backTransform(fm1, "state") 
+
+#backTransform(fm1, "det")
+
+```
+
+## rana_clamitans
+### Table formattig
+```{r}
+
+green_frog_visits <- clean_up %>% 
+  select(site, date, species_capture, n, capture_type) %>% 
+  filter(species_capture == "rana_clamitans") %>% 
+  select(!species_capture) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -122,6 +278,33 @@ bull_frog_visits <- bull_frog %>%
 
 
 ```
+
+### n-mixture unmakred models
+```{r}
+
+green_frog_unmarked_nmixture <- green_frog_visits %>% 
+  ungroup() %>% 
+  filter(capture_type == "new") %>% 
+  select(!c(capture_type, site)) 
+
+# %>% 
+#   mutate(N = rowSums(across(c(visit_1:visit_6)))) %>% 
+#   relocate(N, .before = visit_1)
+
+umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
+
+summary(umf)
+
+fm1 <- pcount(~1 ~1, data = umf)
+
+backTransform(fm1, "state") 
+
+backTransform(fm1, "det")
+
+```
+
+
+
 
 
 ## Table formating multivariate n-mixutre
