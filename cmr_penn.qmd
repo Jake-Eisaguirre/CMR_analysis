@@ -88,6 +88,7 @@ ggplot(data = viz) +
 ```
 
 ## Clean up species list with counts
+
 ```{r}
 
 
@@ -111,7 +112,9 @@ clean_up <- raw_visits %>%
 ```
 
 ## rana_catesbeiana
+
 ### Table formatting
+
 ```{r}
 
 bull_frog_visits <- clean_up %>% 
@@ -137,6 +140,7 @@ bull_frog_visits <- clean_up %>%
 ```
 
 ### static n-mixture unmakred models
+
 ```{r}
 
 bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
@@ -153,12 +157,16 @@ fm1 <- pcount(~1 ~1, data = umf)
 
 backTransform(fm1, "state") 
 
-#backTransform(fm1, "det")
+backTransform(fm1, "det")
+
+# assuming the sites and enviro variables are exactly the same we say there is 40.7 frogs at these sites and we are only detecting 23% of the frogs. 
 
 ```
 
 ## pseudacris_crucifer
+
 ### Table formattig
+
 ```{r}
 
 peep_frog_visits <- clean_up %>% 
@@ -181,6 +189,7 @@ peep_frog_visits <- clean_up %>%
 ```
 
 ### static n-mixture unmakred models
+
 ```{r}
 peep_unmarked_nmixture <- peep_frog_visits %>% 
   ungroup() %>% 
@@ -196,12 +205,14 @@ fm1 <- pcount(~1 ~1, data = umf)
 
 backTransform(fm1, "state") 
 
-#backTransform(fm1, "det")
+backTransform(fm1, "det")
 
 ```
 
 ## rana_clamitans
+
 ### Table formattig
+
 ```{r}
 
 green_frog_visits <- clean_up %>% 
@@ -228,6 +239,7 @@ green_frog_visits <- clean_up %>%
 ```
 
 ### static n-mixture unmakred models
+
 ```{r}
 
 green_frog_unmarked_nmixture <- green_frog_visits %>% 
