@@ -315,3 +315,24 @@ bull_frog_cmr <- clean_up %>%
 
 ```
 
+```{r}
+
+t <- clean_up %>% 
+  select(site, date, species_capture, n) %>% 
+  filter(species_capture == "rana_catesbeiana") %>% 
+  select(!species_capture) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .)))
+
+
+
+```
+
