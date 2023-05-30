@@ -13,7 +13,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, reshape2, lubridate)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, reshape2, lubridate, AICcmodavg, RColorBrewer)
 
 ```
 
@@ -127,7 +127,6 @@ bull_frog_visits <- clean_up %>%
   select(!date) %>% 
   ungroup() %>%
   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
-  #add_row(site = "phelps_pond", capture_type = "recapture") %>% 
   group_by(site) %>% 
   mutate(across(contains("visit"), 
                 ~ifelse(is.na(.) &
@@ -159,7 +158,9 @@ backTransform(fm1, "state")
 
 backTransform(fm1, "det")
 
-# assuming the sites and enviro variables are exactly the same we say there is 40.7 frogs at these sites and we are only detecting 23% of the frogs. 
+# assuming the sites and enviro variables are exactly the same we say there is 40.7 +-7.9 frogs at these sites and we are only detecting 23% of the frogs. 
+
+
 
 ```
 
@@ -207,6 +208,8 @@ backTransform(fm1, "state")
 
 backTransform(fm1, "det")
 
+# assuming the sites and enviro variables are exactly the same we say there is 85.7 +-24.4 frogs at these sites and we are only detecting 1.2% of the frogs.
+
 ```
 
 ## rana_clamitans
@@ -251,7 +254,7 @@ green_frog_unmarked_nmixture <- green_frog_visits %>%
 #   mutate(N = rowSums(across(c(visit_1:visit_6)))) %>% 
 #   relocate(N, .before = visit_1)
 
-umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
+umf <- unmarkedFramePCount(y = green_frog_unmarked_nmixture)
 
 summary(umf)
 
@@ -261,33 +264,54 @@ backTransform(fm1, "state")
 
 backTransform(fm1, "det")
 
+# assuming the sites and enviro variables are exactly the same we say there is 94.8 +-13.1 frogs at these sites and we are only detecting 4.3% of the frogs.
+
 ```
 
-## Table formating multivariate n-mixutre
+## Table formating capture-recapture
 
 ```{r}
 
-bull_frog_m_n_mixture <-  bull_frog_visits %>% 
-  filter(capture_type == "new") %>% 
-  select(!capture_type)
 
-bull_frog_m_n_mixture$captureHistory <- paste(bull_frog_m_n_mixture$visit_1, bull_frog_m_n_mixture$visit_2,
-                                              bull_frog_m_n_mixture$visit_3, bull_frog_m_n_mixture$visit_4,
-                                              bull_frog_m_n_mixture$visit_5, bull_frog_m_n_mixture$visit_6,
-                                              sep = "")
+mid_clean_up <- raw_data %>% 
+  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+                                "rana_clamitans")) %>% 
+  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
+  group_by(date, site, capture_type, species_capture) %>% 
+  summarise(n = n()) %>% 
+  ungroup() 
 
+# populate zeros
+clean_up <- raw_visits %>% 
+  left_join(mid_clean_up) %>%
+  complete(nesting(date, site), 
+           species_capture = unique(mid_clean_up$species_capture), 
+           fill = list(n = 0)) %>% 
+  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type))
 
-a <- expand.grid(0:1, 0:1, 0:1, 0:1, 0:1, 0:1)
-
-bull_frog_m_n_mixture$captureHistory <- factor(bull_frog_m_n_mixture$captureHistory,
-                                               levels = c()
-
-alfl$captureHistory <- paste(alfl$interval1, alfl$interval2, alfl$interval3, sep="")
-alfl$captureHistory <- factor(alfl$captureHistory,
-    levels=c("001", "010", "011", "100", "101", "110", "111"))
-## Don't do this:
-#levels(alfl$id) <- rownames(alfl.covs)
-alfl$id <- factor(alfl$id, levels=rownames(alfl.covs))
 
 
 ```
+
+### Bullfrog CMR data
+```{r}
+
+bull_frog_cmr <- clean_up %>% 
+  select(site, date, capture_type, species_capture, n) %>% 
+  filter(species_capture == "rana_catesbeiana") %>% 
+  select(!species_capture) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  add_row(site = "phelps_pond", capture_type = "recapture") %>%
+  add_row(site = "tryon_weber", capture_type = "recapture", visit_1 = 0, visit_2 = 0, visit_3 = 0) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .)))
+
+```
+
