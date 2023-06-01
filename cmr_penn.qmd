@@ -1,26 +1,24 @@
 ---
-title: "CMR Pennsylvania"
-format: html
-editor: visual
+title: "N-Mixture/CMR Exploratory - Pennsylvania"
+format: pdf
 ---
 
 ## Load Packages
 
 ```{r}
-
+#| output: false
 if (!require(librarian)){
   install.packages("librarian")
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, reshape2, lubridate, AICcmodavg, RColorBrewer)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra)
 
 ```
 
 ## Connect to `survey_data` schema in `ribbitr` database
-
 ```{r}
-
+#| output: false
 tryCatch({
     drv <- dbDriver("Postgres")
     print("Connecting to Database…")
@@ -44,11 +42,10 @@ dbExecute(connection, "set search_path to survey_data")
 
 ```
 
-## Query 2022 and new CMR Penn data
-
+## Query 2022 CMR Penn data
 ```{r}
 
-# 30 unique dates for visits
+# Data
 cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
           c.species_capture, c.capture_type
           from region r
@@ -65,7 +62,7 @@ raw_data <- dbGetQuery(connection, cmr_q) %>%
 
 
 
-# find visits with no captures
+# find all visits
 visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
                 from region r
                 join site s on r.region_id = s.region_id 
@@ -77,6 +74,13 @@ raw_visits <-dbGetQuery(connection, visit_cmr_q) %>%
   arrange(date) %>% 
   select(site, date)
 
+
+
+
+```
+
+## Visualize all Visits
+```{r}
 viz <- raw_visits %>% 
   group_by(site) %>% 
   summarise(n = n())
@@ -87,12 +91,13 @@ ggplot(data = viz) +
 
 ```
 
+
 ## Clean up species list with counts
-
+#### Filter for CMR focal species and summarize species counts. Then populate zeros for 3 focal species into the data set for visits when captures did not occur.
 ```{r}
+#| output: false
 
-
-
+# filter for CMR focal species and summarize counts
 mid_clean_up <- raw_data %>% 
   filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
                                 "rana_clamitans")) %>% 
@@ -114,7 +119,7 @@ clean_up <- raw_visits %>%
 ## rana_catesbeiana
 
 ### Table formatting
-
+#### Filter data for `rana_catesbeiana`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited. 
 ```{r}
 
 bull_frog_visits <- clean_up %>% 
@@ -134,17 +139,15 @@ bull_frog_visits <- clean_up %>%
 
 
 
-
+kableExtra::kable(bull_frog_visits)
 
 ```
 
-### static n-mixture unmakred models
-
+### static n-mixture models no covariates 
 ```{r}
 
 bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  #filter(capture_type == "new") %>% 
   select(!c(site)) 
 
 
@@ -154,20 +157,18 @@ summary(umf)
 
 fm1 <- pcount(~1 ~1, data = umf)
 
+# Get estimates on link scale 
 backTransform(fm1, "state") 
-
+# Get estimates on natural scale
 backTransform(fm1, "det")
 
-# assuming the sites and enviro variables are exactly the same we say there is 40.7 +-7.9 frogs at these sites and we are only detecting 23% of the frogs. 
-
-
-
 ```
+#### Assuming the sites and enviro variables are exactly the same we can say there is 40.7 +-7.9 frogs at these sites and we are only detecting 23% of the frogs.
+
 
 ## pseudacris_crucifer
-
-### Table formattig
-
+### Table formatting
+#### Filter data for `pseudacris_crucifer`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 ```{r}
 
 peep_frog_visits <- clean_up %>% 
@@ -186,10 +187,11 @@ peep_frog_visits <- clean_up %>%
                           !is.na(lag(.)), 0, .)))
 
 
+kable(peep_frog_visits)
 
 ```
 
-### static n-mixture unmakred models
+### static n-mixture unmakred models no covariates
 
 ```{r}
 peep_unmarked_nmixture <- peep_frog_visits %>% 
@@ -208,13 +210,16 @@ backTransform(fm1, "state")
 
 backTransform(fm1, "det")
 
-# assuming the sites and enviro variables are exactly the same we say there is 85.7 +-24.4 frogs at these sites and we are only detecting 1.2% of the frogs.
+
 
 ```
+#### Assuming the sites and enviro variables are exactly the same we can estimate there is 85.7 +-24.4 frogs at these sites and we are only detecting 1.2% of the frogs.
+
 
 ## rana_clamitans
 
-### Table formattig
+### Table formatting
+#### Filter data for `rana_clamitans`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 
 ```{r}
 
@@ -241,18 +246,14 @@ green_frog_visits <- clean_up %>%
 
 ```
 
-### static n-mixture unmakred models
+### static n-mixture with no co-variates
 
 ```{r}
 
 green_frog_unmarked_nmixture <- green_frog_visits %>% 
   ungroup() %>% 
-  #filter(capture_type == "new") %>% 
   select(!c(site)) 
 
-# %>% 
-#   mutate(N = rowSums(across(c(visit_1:visit_6)))) %>% 
-#   relocate(N, .before = visit_1)
 
 umf <- unmarkedFramePCount(y = green_frog_unmarked_nmixture)
 
@@ -264,75 +265,77 @@ backTransform(fm1, "state")
 
 backTransform(fm1, "det")
 
-# assuming the sites and enviro variables are exactly the same we say there is 94.8 +-13.1 frogs at these sites and we are only detecting 4.3% of the frogs.
+
 
 ```
+#### Assuming the sites and enviro variables are exactly the same we estimate there is 94.8 +-13.1 frogs at these sites and we are only detecting 4.3% of the frogs.
+
 
 ## Table formating capture-recapture
 
 ```{r}
 
 
-mid_clean_up <- raw_data %>% 
-  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
-                                "rana_clamitans")) %>% 
-  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
-  group_by(date, site, capture_type, species_capture) %>% 
-  summarise(n = n()) %>% 
-  ungroup() 
-
-# populate zeros
-clean_up <- raw_visits %>% 
-  left_join(mid_clean_up) %>%
-  complete(nesting(date, site), 
-           species_capture = unique(mid_clean_up$species_capture), 
-           fill = list(n = 0)) %>% 
-  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type))
-
+# mid_clean_up <- raw_data %>% 
+#   filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+#                                 "rana_clamitans")) %>% 
+#   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
+#   group_by(date, site, capture_type, species_capture) %>% 
+#   summarise(n = n()) %>% 
+#   ungroup() 
+# 
+# # populate zeros
+# clean_up <- raw_visits %>% 
+#   left_join(mid_clean_up) %>%
+#   complete(nesting(date, site), 
+#            species_capture = unique(mid_clean_up$species_capture), 
+#            fill = list(n = 0)) %>% 
+#   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type))
+# 
 
 
 ```
 
 ### Bullfrog CMR data
+
 ```{r}
 
-bull_frog_cmr <- clean_up %>% 
-  select(site, date, capture_type, species_capture, n) %>% 
-  filter(species_capture == "rana_catesbeiana") %>% 
-  select(!species_capture) %>% 
-  group_by(site) %>% 
-  mutate(n_visit = match(date, unique(date)),
-         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
-  select(!date) %>% 
-  ungroup() %>%
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
-  add_row(site = "phelps_pond", capture_type = "recapture") %>%
-  add_row(site = "tryon_weber", capture_type = "recapture", visit_1 = 0, visit_2 = 0, visit_3 = 0) %>% 
-  group_by(site) %>% 
-  mutate(across(contains("visit"), 
-                ~ifelse(is.na(.) &
-                          !is.na(lag(.)), 0, .)))
+# bull_frog_cmr <- clean_up %>% 
+#   select(site, date, capture_type, species_capture, n) %>% 
+#   filter(species_capture == "rana_catesbeiana") %>% 
+#   select(!species_capture) %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!date) %>% 
+#   ungroup() %>%
+#   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+#   add_row(site = "phelps_pond", capture_type = "recapture") %>%
+#   add_row(site = "tryon_weber", capture_type = "recapture", visit_1 = 0, visit_2 = 0, visit_3 = 0) %>% 
+#   group_by(site) %>% 
+#   mutate(across(contains("visit"), 
+#                 ~ifelse(is.na(.) &
+#                           !is.na(lag(.)), 0, .)))
 
 ```
 
 ```{r}
 
-t <- clean_up %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rana_catesbeiana") %>% 
-  select(!species_capture) %>% 
-  group_by(site) %>% 
-  mutate(n_visit = match(date, unique(date)),
-         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
-  select(!date) %>% 
-  ungroup() %>%
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
-  group_by(site) %>% 
-  mutate(across(contains("visit"), 
-                ~ifelse(is.na(.) &
-                          !is.na(lag(.)), 0, .)))
+# t <- clean_up %>% 
+#   select(site, date, species_capture, n) %>% 
+#   filter(species_capture == "rana_catesbeiana") %>% 
+#   select(!species_capture) %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!date) %>% 
+#   ungroup() %>%
+#   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+#   group_by(site) %>% 
+#   mutate(across(contains("visit"), 
+#                 ~ifelse(is.na(.) &
+#                           !is.na(lag(.)), 0, .)))
 
 
 
 ```
-
