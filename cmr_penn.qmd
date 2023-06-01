@@ -1,5 +1,5 @@
 ---
-title: "N-Mixture/CMR Exploratory - Pennsylvania"
+title: "Exploratory N-Mixture/CMR - Pennsylvania"
 format: pdf
 ---
 
@@ -114,11 +114,18 @@ clean_up <- raw_visits %>%
            fill = list(n = 0))
 
 
+
+
 ```
+
+```{r}
+kable(head(clean_up, n = 15))
+```
+
 
 ## rana_catesbeiana
 
-### Table formatting
+### N-Mixture Table formatting
 #### Filter data for `rana_catesbeiana`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited. 
 ```{r}
 
@@ -139,7 +146,7 @@ bull_frog_visits <- clean_up %>%
 
 
 
-kableExtra::kable(bull_frog_visits)
+kable(bull_frog_visits)
 
 ```
 
@@ -166,8 +173,10 @@ backTransform(fm1, "det")
 #### Assuming the sites and enviro variables are exactly the same we can say there is 40.7 +-7.9 frogs at these sites and we are only detecting 23% of the frogs.
 
 
+$~$
+
 ## pseudacris_crucifer
-### Table formatting
+### N-Mixture Table formatting
 #### Filter data for `pseudacris_crucifer`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 ```{r}
 
@@ -215,10 +224,11 @@ backTransform(fm1, "det")
 ```
 #### Assuming the sites and enviro variables are exactly the same we can estimate there is 85.7 +-24.4 frogs at these sites and we are only detecting 1.2% of the frogs.
 
+$~$
 
 ## rana_clamitans
 
-### Table formatting
+### N-Mixture Table Formatting
 #### Filter data for `rana_clamitans`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 
 ```{r}
@@ -270,6 +280,7 @@ backTransform(fm1, "det")
 ```
 #### Assuming the sites and enviro variables are exactly the same we estimate there is 94.8 +-13.1 frogs at these sites and we are only detecting 4.3% of the frogs.
 
+$~$
 
 ## Table formating capture-recapture
 
