@@ -155,14 +155,16 @@ bull_frog_visits <- clean_up %>%
 
 bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  select(!c(site)) 
+  select(!c(site))
+
+site <- 
 
 
 umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
 
 summary(umf)
 
-fm1 <- pcount(~1 ~1, data = umf)
+fm1 <- pcount( ~ 1  ~ site, data = umf)
 
 # Get estimates on link scale 
 backTransform(fm1, "state") 
