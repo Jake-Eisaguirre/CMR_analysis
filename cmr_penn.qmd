@@ -46,7 +46,7 @@ dbExecute(connection, "set search_path to survey_data")
 ```{r}
 
 # Data
-cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
+nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
           c.species_capture, c.capture_type
           from region r
           join site s on r.region_id = s.region_id 
@@ -56,21 +56,21 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           where r.region = 'pennsylvania'
           and v.date > '2022-01-01';"
 
-raw_data <- dbGetQuery(connection, cmr_q) %>% 
+nmix_raw_data <- dbGetQuery(connection, nmix_q) %>% 
   select(!c(region, survey_time, duration_minutes)) %>% 
   arrange(date)
 
 
 
 # find all visits
-visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
+visit_nmix_q <- "select r.region, s.site, v.date, v.survey_time
                 from region r
                 join site s on r.region_id = s.region_id 
                 join visit v on s.site_id = v.site_id 
                 where r.region = 'pennsylvania'
                 and v.date > '2022-01-01';"
 
-raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
+nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
   arrange(date) %>% 
   select(site, date)
 
@@ -98,7 +98,7 @@ ggplot(data = viz) +
 #| output: false
 
 # filter for CMR focal species and summarize counts
-mid_clean_up <- raw_data %>% 
+n_mix_mid_clean_up <- nmix_raw_data %>% 
   filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
                                 "rana_clamitans")) %>% 
   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
@@ -107,10 +107,10 @@ mid_clean_up <- raw_data %>%
   ungroup() 
 
 # populate zeros
-clean_up <- raw_visits %>% 
-  left_join(mid_clean_up) %>%
+nmix_clean_up <- nmix_raw_visits %>% 
+  left_join(n_mix_mid_clean_up) %>%
   complete(nesting(date, site), 
-           species_capture = unique(mid_clean_up$species_capture), 
+           species_capture = unique(n_mix_mid_clean_up$species_capture), 
            fill = list(n = 0))
 
 
@@ -129,7 +129,7 @@ clean_up <- raw_visits %>%
 #### Filter data for `rana_catesbeiana`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited. 
 ```{r}
 
-bull_frog_visits <- clean_up %>% 
+bull_frog_visits <- nmix_clean_up %>% 
   select(site, date, species_capture, n) %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
   select(!species_capture) %>% 
@@ -316,6 +316,40 @@ raw_visits <-dbGetQuery(connection, visit_cmr_q) %>%
   arrange(date) %>% 
   select(site, date)
 ```
+
+## Bullfrog CMR data
+```{r}
+mid_clean_up <- raw_data %>% 
+  filter(species_capture == "rana_catesbeiana") %>% 
+  select(!c(capture_date, capture_type)) %>% 
+  unite(species_capture, c(species_capture, cmr_id), sep = "_") %>% 
+  unique() 
+  
+pop_zeros <- raw_visits %>% 
+  left_join(mid_clean_up) %>%
+  complete(nesting(date, site), 
+           fill = list(n = 0)) %>% 
+  ungroup() %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() 
+  
+clean <- pop_zeros %>%   
+  group_by(site, species_capture, n_visit) %>% 
+  reframe(n = n()) %>% 
+  mutate(n = if_else(n == 2, 1, n)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  relocate(visit_1, .before = visit_2) %>% 
+  relocate(visit_3, .after = visit_2) %>% 
+  select(!species_capture) %>% 
+  filter(!site == "tryon_weber")
+  
+  
+```
+
+
 
 ```{r}
 
