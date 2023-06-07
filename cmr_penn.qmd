@@ -81,7 +81,7 @@ nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
 
 ## Visualize all Visits
 ```{r}
-viz <- raw_visits %>% 
+viz <- nmix_raw_visits %>% 
   group_by(site) %>% 
   summarise(n = n())
 
@@ -164,7 +164,7 @@ umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
 
 summary(umf)
 
-fm1 <- pcount( ~ 1  ~ site, data = umf)
+fm1 <- pcount( ~ 1  ~ 1, data = umf)
 
 # Get estimates on link scale 
 backTransform(fm1, "state") 
@@ -318,6 +318,7 @@ raw_visits <-dbGetQuery(connection, visit_cmr_q) %>%
 ```
 
 ## Bullfrog CMR data
+### Matrix: individual counts by visits
 ```{r}
 mid_clean_up <- raw_data %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
@@ -344,11 +345,44 @@ clean <- pop_zeros %>%
   relocate(visit_1, .before = visit_2) %>% 
   relocate(visit_3, .after = visit_2) %>% 
   select(!species_capture) %>% 
-  filter(!site == "tryon_weber")
+  filter(!site == "tryon_weber") %>% 
+  mutate_all(~replace_na(.,0))
   
   
 ```
 
+### Final matrix
+```{r}
+
+clean$captureHistory <- paste(clean$visit_1, clean$visit_2, clean$visit_3, clean$visit_4, clean$visit_5, clean$visit_6, clean$visit_7,
+                               sep = "")
+
+lev <- unique(clean$captureHistory)
+
+clean$captureHistory <- factor(clean$captureHistory, levels = lev)
+
+table <- table(clean$site, clean$captureHistory)
+
+head(table)
+
+class(table) <- "matrix"
+
+o2y <- matrix(1, 6, 7)
+
+
+crPiFun <- function(p, n) {
+  
+   p^n * (1-n)^(1-n)
+  
+}
+
+
+umf <- unmarkedFrameMPois(y = table, piFun = "crPiFun", obsToY = o2y)
+
+fm <- multinomPois(~1 ~1, umf, engine = "R")
+
+backTransform(fm, "state")
+```
 
 
 ```{r}
@@ -373,6 +407,19 @@ intervalMat <- matrix(c('1','2','3'), 50, 3, byrow=TRUE)
 class(alfl.H1) <- "matrix"
 
 o2y <- matrix(1, 3, 7)
+
+crPiFun <- function(p) {
+    p1 <- p[,1]
+    p2 <- p[,2]
+    p3 <- p[,3]
+    cbind("001" = (1-p1) * (1-p2) * p3,
+          "010" = (1-p1) * p2     * (1-p3),
+          "011" = (1-p1) * p2     * p3,
+          "100" = p1     * (1-p2) * (1-p3),
+          "101" = p1     * (1-p2) * p3,
+          "110" = p1     * p2     * (1-p3),
+          "111" = p1     * p2     * p3)
+}
 
 umf.cr1 <- unmarkedFrameMPois(y=alfl.H1,
                               siteCovs=alfl.covs[,c("woody", "struct", "time.1")],
