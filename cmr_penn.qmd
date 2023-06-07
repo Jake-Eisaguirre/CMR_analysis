@@ -155,21 +155,65 @@ bull_frog_visits <- nmix_clean_up %>%
 
 bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  select(!c(site))
+  select(!site)
 
-site <- 
+site <- bull_frog_visits %>% 
+  select(site) %>%
+  rename(x2 = site) %>% 
+  add_column(x1 = c(1:7)) %>%
+  relocate(x1, .before = x2) %>%
+  ungroup() %>%
+  data.frame() %>% 
+  mutate(x2 = as.factor(x2))
 
 
-umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
+umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture, siteCovs = site)
 
 summary(umf)
 
-fm1 <- pcount( ~ 1  ~ 1, data = umf)
+fm1 <- pcount( ~ 1 ~ x2, data = umf, engine = "R")
+
+summary(fm1)
 
 # Get estimates on link scale 
 backTransform(fm1, "state") 
 # Get estimates on natural scale
 backTransform(fm1, "det")
+
+confint(fm1, type = "state", level = 0.95)
+
+
+#site covariates example
+R <- 4 # number of sites
+J <- 3 # number of visits
+y <- matrix(c(
+   1,2,0,
+   0,0,0,
+   1,1,1,
+   2,2,1), nrow=R, ncol=J, byrow=TRUE)
+y
+
+site.covs <- data.frame(x1=1:4, x2=factor(c('A','B','A','B')))
+site.covs
+
+obs.covs <- list(
+   x3 = matrix(c(
+      -1,0,1,
+      -2,0,0,
+      -3,1,0,
+      0,0,0), nrow=R, ncol=J, byrow=TRUE),
+   x4 = matrix(c(
+      'a','b','c',
+      'd','b','a',
+      'a','a','c',
+      'a','b','a'), nrow=R, ncol=J, byrow=TRUE))
+obs.covs
+
+umf <- unmarkedFramePCount(y=y, siteCovs=site.covs, 
+    obsCovs=obs.covs)          # organize data
+umf                            # take a l
+summary(umf)                   # summarize data
+fm <- pcount(~1 ~1, umf, K=10) 
 
 ```
 #### Assuming the sites and enviro variables are exactly the same we can say there is 40.7 +-7.9 frogs at these sites and ??? 23 % chance of detecting each individual.
