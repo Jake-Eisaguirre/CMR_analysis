@@ -58,7 +58,9 @@ nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
 
 nmix_raw_data <- dbGetQuery(connection, nmix_q) %>% 
   select(!c(region, survey_time, duration_minutes)) %>% 
-  arrange(date)
+  arrange(date) 
+
+write_csv(nmix_raw_data, here("data", "nmix_raw_data.csv"))
 
 
 
@@ -75,12 +77,16 @@ nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
   select(site, date)
 
 
-
+write_csv(nmix_raw_visits, here("data", "nmix_raw_visits.csv"))
 
 ```
 
 ## Visualize all Visits
 ```{r}
+nmix_raw_visits <- read_csv(here("data", "nmix_raw_visits.csv"))
+nmix_raw_data <- read_csv(here("data", "nmix_raw_data.csv"))
+
+
 viz <- nmix_raw_visits %>% 
   group_by(site) %>% 
   summarise(n = n())
@@ -342,11 +348,11 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           where r.region = 'pennsylvania'
           and v.date > '2022-01-01';"
 
-raw_data <- dbGetQuery(connection, cmr_q) %>% 
+cmr_raw_data <- dbGetQuery(connection, cmr_q) %>% 
   select(!c(region, survey_time, duration_minutes)) %>% 
   arrange(date)
 
-
+write_csv(cmr_raw_data, here("data", "cmr_raw_data.csv"))
 
 # find all visits
 visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
@@ -356,14 +362,20 @@ visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
                 where r.region = 'pennsylvania'
                 and v.date > '2022-01-01';"
 
-raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
+cmr_raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
   arrange(date) %>% 
   select(site, date)
+
+write_csv(cmr_raw_visits, here("data", "cmr_raw_visits.csv"))
 ```
 
 ## Bullfrog CMR data
 ### Matrix: individual counts by visits
 ```{r}
+
+cmr_raw_data.csv <- read_csv(here("data", "cmr_raw_data.csv"))
+cmr_raw_visits <- read_csv(here("data", "cmr_raw_visits.csv"))
+
 mid_clean_up <- raw_data %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
   select(!c(capture_date, capture_type)) %>% 
