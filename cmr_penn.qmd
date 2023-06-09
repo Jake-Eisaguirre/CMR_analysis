@@ -47,12 +47,12 @@ dbExecute(connection, "set search_path to survey_data")
 
 # Data
 nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
-          c.species_capture, c.capture_type
+          v2.species_ves
           from region r
           join site s on r.region_id = s.region_id 
           full join visit v on s.site_id = v.site_id 
           join survey s2 on v.visit_id = s2.visit_id 
-          join capture c on s2.survey_id = c.survey_id
+          join ves v2 on s2.survey_id = v2.survey_id
           where r.region = 'pennsylvania'
           and v.date > '2022-01-01';"
 
@@ -105,10 +105,10 @@ ggplot(data = viz) +
 
 # filter for CMR focal species and summarize counts
 n_mix_mid_clean_up <- nmix_raw_data %>% 
-  filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+  filter(species_ves %in% c("pseudacris_crucifer", "rana_catesbeiana", 
                                 "rana_clamitans", "rana_pipiens")) %>% 
-  mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
-  group_by(date, site, species_capture) %>% 
+  #mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
+  group_by(date, site, species_ves) %>% 
   summarise(n = n()) %>% 
   ungroup() 
 
@@ -137,9 +137,9 @@ kable(head(nmix_clean_up, n = 15))
 ```{r}
 
 bull_frog_visits <- nmix_clean_up %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rana_catesbeiana") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "rana_catesbeiana") %>% 
+  select(!species_ves) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
