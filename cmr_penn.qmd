@@ -60,7 +60,7 @@ nmix_raw_data <- dbGetQuery(connection, nmix_q) %>%
   select(!c(region, survey_time, duration_minutes)) %>% 
   arrange(date) 
 
-write_csv(nmix_raw_data, here("data", "nmix_raw_data.csv"))
+#write_csv(nmix_raw_data, here("data", "nmix_raw_data.csv"))
 
 
 
@@ -77,14 +77,14 @@ nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
   select(site, date)
 
 
-write_csv(nmix_raw_visits, here("data", "nmix_raw_visits.csv"))
+#write_csv(nmix_raw_visits, here("data", "nmix_raw_visits.csv"))
 
 ```
 
 ## Visualize all Visits
 ```{r}
-nmix_raw_visits <- read_csv(here("data", "nmix_raw_visits.csv"))
-nmix_raw_data <- read_csv(here("data", "nmix_raw_data.csv"))
+#nmix_raw_visits <- read_csv(here("data", "nmix_raw_visits.csv"))
+#nmix_raw_data <- read_csv(here("data", "nmix_raw_data.csv"))
 
 
 viz <- nmix_raw_visits %>% 
@@ -96,7 +96,7 @@ ggplot(data = viz) +
   ggtitle("Raw Visits")
 
 ```
-
+\newpage
 
 ## Clean up species list with counts
 #### Filter for CMR focal species and summarize species counts. Then populate zeros for 3 focal species into the data set for visits when captures did not occur.
@@ -125,9 +125,10 @@ nmix_clean_up <- nmix_raw_visits %>%
 ```
 
 ```{r}
-#kable(head(clean_up, n = 15))
+kable(head(nmix_clean_up, n = 15))
 ```
 
+\newpage
 
 ## rana_catesbeiana
 
@@ -152,7 +153,7 @@ bull_frog_visits <- nmix_clean_up %>%
 
 
 
-#kable(bull_frog_visits)
+kable(bull_frog_visits)
 
 ```
 
@@ -163,67 +164,26 @@ bull_frog_unmarked_nmixture <- bull_frog_visits %>%
   ungroup() %>% 
   select(!site)
 
-site <- bull_frog_visits %>% 
-  select(site) %>%
-  rename(x2 = site) %>% 
-  add_column(x1 = c(1:7)) %>%
-  relocate(x1, .before = x2) %>%
-  ungroup() %>%
-  data.frame() %>% 
-  mutate(x2 = as.factor(x2))
 
-
-umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture, siteCovs = site)
+umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
 
 summary(umf)
 
-fm1 <- pcount( ~ 1 ~ x2, data = umf, engine = "R")
+fm1 <- pcount( ~ 1 ~ 1, 
+               data = umf, 
+               engine = "R")
 
 summary(fm1)
 
-# Get estimates on link scale 
-backTransform(fm1, "state") 
-# Get estimates on natural scale
+backTransform(fm1, "state")
+
 backTransform(fm1, "det")
 
-confint(fm1, type = "state", level = 0.95)
-
-
-#site covariates example
-R <- 4 # number of sites
-J <- 3 # number of visits
-y <- matrix(c(
-   1,2,0,
-   0,0,0,
-   1,1,1,
-   2,2,1), nrow=R, ncol=J, byrow=TRUE)
-y
-
-site.covs <- data.frame(x1=1:4, x2=factor(c('A','B','A','B')))
-site.covs
-
-obs.covs <- list(
-   x3 = matrix(c(
-      -1,0,1,
-      -2,0,0,
-      -3,1,0,
-      0,0,0), nrow=R, ncol=J, byrow=TRUE),
-   x4 = matrix(c(
-      'a','b','c',
-      'd','b','a',
-      'a','a','c',
-      'a','b','a'), nrow=R, ncol=J, byrow=TRUE))
-obs.covs
-
-umf <- unmarkedFramePCount(y=y, siteCovs=site.covs, 
-    obsCovs=obs.covs)          # organize data
-umf                            # take a l
-summary(umf)                   # summarize data
-fm <- pcount(~1 ~1, umf, K=10) 
 
 ```
-#### Assuming the sites and enviro variables are exactly the same we can say there is 40.7 +-7.9 frogs at these sites and ??? 23 % chance of detecting each individual.
+#### Assuming the sites and enviro variables are exactly the same we can say there is 40.7 +-7.9 frogs at each site with 23 % chance of detecting each individual.
 
+\newpage
 
 $~$
 
@@ -232,7 +192,7 @@ $~$
 #### Filter data for `pseudacris_crucifer`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 ```{r}
 
-peep_frog_visits <- clean_up %>% 
+peep_frog_visits <- nmix_clean_up %>% 
   select(site, date, species_capture, n) %>% 
   filter(species_capture == "pseudacris_crucifer") %>% 
   select(!species_capture) %>% 
@@ -248,12 +208,11 @@ peep_frog_visits <- clean_up %>%
                           !is.na(lag(.)), 0, .)))
 
 
-#kable(peep_frog_visits)
+kable(peep_frog_visits)
 
 ```
 
-### static n-mixture unmakred models no covariates
-
+### static n-mixture model no covariates
 ```{r}
 peep_unmarked_nmixture <- peep_frog_visits %>% 
   ungroup() %>% 
@@ -274,9 +233,10 @@ backTransform(fm1, "det")
 
 
 ```
-#### Assuming the sites and enviro variables are exactly the same we can estimate there is 85.7 +-24.4 frogs at these sites and we are only detecting 1.2% of the frogs.
+#### Assuming the sites and enviro variables are exactly the same we can estimate there is 85.7 +-24.4 frogs at each site with a 1.2% chance of detecting each individual.
 
-$~$
+\newpage
+
 
 ## rana_clamitans
 
@@ -285,7 +245,7 @@ $~$
 
 ```{r}
 
-green_frog_visits <- clean_up %>% 
+green_frog_visits <- nmix_clean_up %>% 
   select(site, date, species_capture, n) %>% 
   filter(species_capture == "rana_clamitans") %>% 
   #select(!species_capture) %>% 
@@ -330,11 +290,13 @@ backTransform(fm1, "det")
 
 
 ```
-#### Assuming the sites and enviro variables are exactly the same we estimate there is 94.8 +-13.1 frogs at these sites and we are only detecting 4.3% of the frogs.
-
 $~$
 
-# Query CMR data
+#### Assuming the sites and enviro variables are exactly the same we estimate there is 94.8 +-13.1 frogs at each sites and with 4.3% of detecting each individual.
+
+\newpage
+
+## Query CMR data
 ```{r}
 # Data
 cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
@@ -352,7 +314,7 @@ cmr_raw_data <- dbGetQuery(connection, cmr_q) %>%
   select(!c(region, survey_time, duration_minutes)) %>% 
   arrange(date)
 
-write_csv(cmr_raw_data, here("data", "cmr_raw_data.csv"))
+#write_csv(cmr_raw_data, here("data", "cmr_raw_data.csv"))
 
 # find all visits
 visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
@@ -366,24 +328,24 @@ cmr_raw_visits <-dbGetQuery(connection, visit_cmr_q) %>%
   arrange(date) %>% 
   select(site, date)
 
-write_csv(cmr_raw_visits, here("data", "cmr_raw_visits.csv"))
+#write_csv(cmr_raw_visits, here("data", "cmr_raw_visits.csv"))
 ```
 
 ## Bullfrog CMR data
 ### Matrix: individual counts by visits
 ```{r}
 
-cmr_raw_data.csv <- read_csv(here("data", "cmr_raw_data.csv"))
-cmr_raw_visits <- read_csv(here("data", "cmr_raw_visits.csv"))
+#cmr_raw_data <- read_csv(here("data", "cmr_raw_data.csv"))
+#mr_raw_visits <- read_csv(here("data", "cmr_raw_visits.csv"))
 
-mid_clean_up <- raw_data %>% 
+bull_mid_clean_up <- cmr_raw_data %>% 
   filter(species_capture == "rana_catesbeiana") %>% 
   select(!c(capture_date, capture_type)) %>% 
   unite(species_capture, c(species_capture, cmr_id), sep = "_") %>% 
   unique() 
   
-pop_zeros <- raw_visits %>% 
-  left_join(mid_clean_up) %>%
+bull_pop_zeros <- cmr_raw_visits %>% 
+  left_join(bull_mid_clean_up) %>%
   complete(nesting(date, site), 
            fill = list(n = 0)) %>% 
   ungroup() %>% 
@@ -393,93 +355,90 @@ pop_zeros <- raw_visits %>%
   select(!date) %>% 
   ungroup() 
   
-clean <- pop_zeros %>%   
+clean_bull <- bull_pop_zeros %>%   
   group_by(site, species_capture, n_visit) %>% 
   reframe(n = n()) %>% 
-  mutate(n = if_else(n == 2, 1, n)) %>% 
+  mutate(n = if_else(is.na(species_capture), NA, n),
+         n = if_else(n == 2, 1, n)) %>% 
   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
   relocate(visit_1, .before = visit_2) %>% 
   relocate(visit_3, .after = visit_2) %>% 
-  select(!species_capture) %>% 
+  drop_na(species_capture) %>% 
   filter(!site == "tryon_weber") %>% 
-  mutate_all(~replace_na(.,0))
+  select(!site) %>% 
+  mutate_all(~replace_na(.,0)) 
   
   
 ```
 
-### Final matrix
+### Final CMR matrix
 ```{r}
 
-clean$captureHistory <- paste(clean$visit_1, clean$visit_2, clean$visit_3, clean$visit_4, clean$visit_5, clean$visit_6, clean$visit_7,
+clean_bull$captureHistory <- paste(clean_bull$visit_1, clean_bull$visit_2, clean_bull$visit_3, 
+                                   clean_bull$visit_4, clean_bull$visit_5, clean_bull$visit_6, 
+                                   clean_bull$visit_7,
                                sep = "")
 
-lev <- unique(clean$captureHistory)
+clean_bull <- clean_bull %>% 
+  ungroup() %>% 
+  group_by(species_capture, captureHistory) %>% 
+  unique()
 
-clean$captureHistory <- factor(clean$captureHistory, levels = lev)
+lev <- unique(clean_bull$captureHistory)
 
-table <- table(clean$site, clean$captureHistory)
+clean_bull$captureHistory <- factor(clean_bull$captureHistory, levels = lev)
 
-head(table)
-
-class(table) <- "matrix"
-
-o2y <- matrix(1, 6, 7)
-
-
-crPiFun <- function(p, n) {
+bull_table <- table(clean_bull$species_capture, clean_bull$captureHistory)
   
-   p^n * (1-n)^(1-n)
-  
-}
 
+kable(head(bull_table, n = 15))
 
-umf <- unmarkedFrameMPois(y = table, piFun = "crPiFun", obsToY = o2y)
-
-fm <- multinomPois(~1 ~1, umf, engine = "R")
-
-backTransform(fm, "state")
 ```
 
-
+### obs covariates, piFun equal detection, Model runn
 ```{r}
+class(bull_table) <- "matrix"
 
-alfl <- read.csv(system.file("csv", "alfl.csv", package="unmarked"))
-
-alfl.covs <- read.csv(system.file("csv", "alflCovs.csv",package="unmarked"), row.names=1)
-
-alfl$captureHistory <- paste(alfl$interval1, alfl$interval2, alfl$interval3, sep="")
-
-alfl$captureHistory <- factor(alfl$captureHistory, levels=c("001", "010", "011", "100", "101", "110", "111"))
-
-alfl$id <- factor(alfl$id, levels=rownames(alfl.covs))
-
-alfl.v1 <- alfl[alfl$survey==1,]
-
-alfl.H1 <- table(alfl.v1$id, alfl.v1$captureHistory)
-
-
-intervalMat <- matrix(c('1','2','3'), 50, 3, byrow=TRUE) 
-
-class(alfl.H1) <- "matrix"
-
-o2y <- matrix(1, 3, 7)
+o2y <- matrix(1, 7, 19)
 
 crPiFun <- function(p) {
     p1 <- p[,1]
     p2 <- p[,2]
     p3 <- p[,3]
-    cbind("001" = (1-p1) * (1-p2) * p3,
-          "010" = (1-p1) * p2     * (1-p3),
-          "011" = (1-p1) * p2     * p3,
-          "100" = p1     * (1-p2) * (1-p3),
-          "101" = p1     * (1-p2) * p3,
-          "110" = p1     * p2     * (1-p3),
-          "111" = p1     * p2     * p3)
+    p4 <- p[,4]
+    p5 <- p[,5]
+    p6 <- p[,6]
+    p7 <- p[,7]
+    cbind("0010000" = (1-p1) * (1-p2) * p3 * (1-p4) * (1-p5) * (1-p6)* (1-p7),    #1: 0010000    
+          "0110000" = (1-p1) * p2 * p3 * (1-p4) * (1-p5) * (1-p6)* (1-p7),        #2: 0110000
+          "0100000" = (1-p1) * p2 * (1-p3) * (1-p4) * (1-p5) * (1-p6)* (1-p7),    #3: 0100000
+          "0110010" = (1-p1) * p2 * p3 * (1-p4) * (1-p5) * p6* (1-p7),            #4: 0110010
+          "0010010" = (1-p1) * (1-p2) * p3 * (1-p4) * (1-p5) * p6 * (1-p7),       #5: 0010010
+          "0001100" = (1-p1) * (1-p2) * (1-p3) * p4 * p5 * (1-p6) * (1-p7),       #6: 0001100
+          "0001000" = (1-p1) * (1-p2) * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),    #7: 0001000
+          "0001010" = (1-p1) * (1-p2) * (1-p3) * p4 * (1-p5) * p6 * (1-p7),       #8: 0001010
+          "0100010" = (1-p1) * p2 * (1-p3) * (1-p4) * (1-p5) * p6 * (1-p7),       #9: 0100010
+          "1101010" = p1 * p2 * (1-p3) * p4 * (1-p5) * p6 * (1-p7),               #10: 1101010
+          "1101100" = p1 * p2 * (1-p3) * p4 * p5 * (1-p6)* (1-p7),                #11: 1101100
+          "0101100" = (1-p1) * p2 * (1-p3) * p4 * p5 * (1-p6)* (1-p7),            #12: 0101100
+          "1001000" = p1 * (1-p2) * (1-p3) * p4 * (1-p5) * (1-p6) * (1-p7),       #13: 1001000
+          "1101000" = p1 * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),            #14: 1101000
+          "0101000" = (1-p1) * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),        #15: 0101000
+          "0101001" = (1-p1) * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* p7,            #16: 0101001
+          "1001010" = p1 * (1-p2) * (1-p3) * p4 * (1-p5) * p6 * (1-p7),           #17: 1001010
+          "1100000" = p1 * p2 * (1-p3) * (1-p4) * (1-p5) * (1-p6)* (1-p7),        #18: 1100000
+          "1000000" = p1 * (1-p2) * (1-p3) * (1-p4) * (1-p5) * (1-p6) * (1-p7)    #19: 1000000
+    )
 }
 
-umf.cr1 <- unmarkedFrameMPois(y=alfl.H1,
-                              siteCovs=alfl.covs[,c("woody", "struct", "time.1")],
-                              obsCovs=list(interval=intervalMat), obsToY=o2y, piFun="crPiFun")
+
+umf <- unmarkedFrameMPois(y = bull_table, piFun = "crPiFun", obsToY = o2y)
+
+fm <- multinomPois(~1 ~1, umf, engine = "R")
+
+backTransform(fm, "state")
+backTransform(fm, "det")
 ```
 
+#### Assuming sites are identical we estimate there are 8 individuals at each site? With a 30% chance of detecting each individual?  Not fully sure how to interpret results. 
 
