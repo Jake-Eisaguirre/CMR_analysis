@@ -106,7 +106,7 @@ ggplot(data = viz) +
 # filter for CMR focal species and summarize counts
 n_mix_mid_clean_up <- nmix_raw_data %>% 
   filter(species_capture %in% c("pseudacris_crucifer", "rana_catesbeiana", 
-                                "rana_clamitans")) %>% 
+                                "rana_clamitans", "rana_pipiens")) %>% 
   mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
   group_by(date, site, species_capture) %>% 
   summarise(n = n()) %>% 
@@ -236,6 +236,61 @@ backTransform(fm1, "det")
 #### Assuming the sites and enviro variables are exactly the same we can estimate there is 85.7 +-24.4 frogs at each site with a 1.2% chance of detecting each individual.
 
 \newpage
+## rana_pipens
+
+### N-Mixture Table Formatting
+#### Filter data for `rana_pipens`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
+
+```{r}
+
+leop_frog_visits <- nmix_clean_up %>% 
+  select(site, date, species_capture, n) %>% 
+  filter(species_capture == "rana_pipiens") %>% 
+  #select(!species_capture) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  group_by(site, n_visit, ) %>% 
+  summarise(n = sum(n)) %>% 
+  ungroup() %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  #add_row(site = "phelps_pond", capture_type = "recapture") %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) 
+
+
+kable(leop_frog_visits)
+
+```
+
+### static n-mixture with no co-variates
+
+```{r}
+
+leop_frog_unmarked_nmixture <- leop_frog_visits %>% 
+  ungroup() %>% 
+  select(!c(site)) 
+
+
+umf <- unmarkedFramePCount(y = leop_frog_unmarked_nmixture)
+
+summary(umf)
+
+fm1 <- pcount(~1 ~1, data = umf)
+
+backTransform(fm1, "state") 
+
+backTransform(fm1, "det")
+
+
+
+```
+
+\newpage
 
 
 ## rana_clamitans
@@ -265,6 +320,7 @@ green_frog_visits <- nmix_clean_up %>%
                           !is.na(lag(.)), 0, .))) 
 
 
+kable(green_frog_visits)
 
 ```
 
