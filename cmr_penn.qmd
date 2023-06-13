@@ -47,14 +47,14 @@ dbExecute(connection, "set search_path to survey_data")
 
 # Data
 nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
-          v2.species_ves
+          v2.species_ves, v2.count
           from region r
           join site s on r.region_id = s.region_id 
           full join visit v on s.site_id = v.site_id 
           join survey s2 on v.visit_id = s2.visit_id 
           join ves v2 on s2.survey_id = v2.survey_id
           where r.region = 'pennsylvania'
-          and v.date > '2022-01-01';"
+          and v.date > '2023-01-01';"
 
 nmix_raw_data <- dbGetQuery(connection, nmix_q) %>% 
   select(!c(region, survey_time, duration_minutes)) %>% 
@@ -70,7 +70,7 @@ visit_nmix_q <- "select r.region, s.site, v.date, v.survey_time
                 join site s on r.region_id = s.region_id 
                 join visit v on s.site_id = v.site_id 
                 where r.region = 'pennsylvania'
-                and v.date > '2022-01-01';"
+                and v.date > '2023-01-01';"
 
 nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
   arrange(date) %>% 
@@ -109,14 +109,14 @@ n_mix_mid_clean_up <- nmix_raw_data %>%
                                 "rana_clamitans", "rana_pipiens")) %>% 
   #mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
   group_by(date, site, species_ves) %>% 
-  summarise(n = n()) %>% 
+  summarise(n = sum(count)) %>% 
   ungroup() 
 
 # populate zeros
-nmix_clean_up <- nmix_raw_visits %>% 
-  left_join(n_mix_mid_clean_up) %>%
+nmix_clean_up <- n_mix_mid_clean_up %>% 
+  #left_join(n_mix_mid_clean_up) %>%
   complete(nesting(date, site), 
-           species_capture = unique(n_mix_mid_clean_up$species_capture), 
+           species_ves = unique(n_mix_mid_clean_up$species_ves), 
            fill = list(n = 0))
 
 
@@ -162,7 +162,8 @@ kable(bull_frog_visits)
 
 bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  select(!site)
+  select(!c(site, c(visit_4:visit_6))) %>% 
+  slice(2:4)
 
 
 umf <- unmarkedFramePCount(y = bull_frog_unmarked_nmixture)
@@ -301,8 +302,8 @@ backTransform(fm1, "det")
 ```{r}
 
 green_frog_visits <- nmix_clean_up %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rana_clamitans") %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "rana_clamitans") %>% 
   #select(!species_capture) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
@@ -330,7 +331,8 @@ kable(green_frog_visits)
 
 green_frog_unmarked_nmixture <- green_frog_visits %>% 
   ungroup() %>% 
-  select(!c(site)) 
+  select(!c(site, c(visit_3:visit_6))) %>% 
+  slice(1:3) 
 
 
 umf <- unmarkedFramePCount(y = green_frog_unmarked_nmixture)
@@ -364,7 +366,7 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           join capture c on s2.survey_id = c.survey_id
           join penn_cmr cmr on c.capture_mark_recapture = cmr.capture_mark_recapture
           where r.region = 'pennsylvania'
-          and v.date > '2022-01-01';"
+          and v.date > '2023-01-01';"
 
 cmr_raw_data <- dbGetQuery(connection, cmr_q) %>% 
   select(!c(region, survey_time, duration_minutes)) %>% 
@@ -378,7 +380,7 @@ visit_cmr_q <- "select r.region, s.site, v.date, v.survey_time
                 join site s on r.region_id = s.region_id 
                 join visit v on s.site_id = v.site_id 
                 where r.region = 'pennsylvania'
-                and v.date > '2022-01-01';"
+                and v.date > '2023-01-01';"
 
 cmr_raw_visits <-dbGetQuery(connection, visit_cmr_q) %>% 
   arrange(date) %>% 
@@ -416,11 +418,12 @@ clean_bull <- bull_pop_zeros %>%
   reframe(n = n()) %>% 
   mutate(n = if_else(is.na(species_capture), NA, n),
          n = if_else(n == 2, 1, n)) %>% 
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
-  relocate(visit_1, .before = visit_2) %>% 
-  relocate(visit_3, .after = visit_2) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  select(!c(visit_5, visit_6)) %>% 
+  # relocate(visit_1, .before = visit_2) %>% 
+  # relocate(visit_3, .after = visit_2) %>% 
   drop_na(species_capture) %>% 
-  filter(!site == "tryon_weber") %>% 
+  #filter(!site == "tryon_weber") %>% 
   select(!site) %>% 
   mutate_all(~replace_na(.,0)) 
   
@@ -431,8 +434,7 @@ clean_bull <- bull_pop_zeros %>%
 ```{r}
 
 clean_bull$captureHistory <- paste(clean_bull$visit_1, clean_bull$visit_2, clean_bull$visit_3, 
-                                   clean_bull$visit_4, clean_bull$visit_5, clean_bull$visit_6, 
-                                   clean_bull$visit_7,
+                                   clean_bull$visit_4, clean_bull$visit_5, clean_bull$visit_6,
                                sep = "")
 
 clean_bull <- clean_bull %>% 
@@ -455,35 +457,22 @@ kable(head(bull_table, n = 15))
 ```{r}
 class(bull_table) <- "matrix"
 
-o2y <- matrix(1, 7, 19)
+o2y <- matrix(1, 4, 7)
 
 crPiFun <- function(p) {
     p1 <- p[,1]
     p2 <- p[,2]
     p3 <- p[,3]
     p4 <- p[,4]
-    p5 <- p[,5]
-    p6 <- p[,6]
-    p7 <- p[,7]
-    cbind("0010000" = (1-p1) * (1-p2) * p3 * (1-p4) * (1-p5) * (1-p6)* (1-p7),    #1: 0010000    
-          "0110000" = (1-p1) * p2 * p3 * (1-p4) * (1-p5) * (1-p6)* (1-p7),        #2: 0110000
-          "0100000" = (1-p1) * p2 * (1-p3) * (1-p4) * (1-p5) * (1-p6)* (1-p7),    #3: 0100000
-          "0110010" = (1-p1) * p2 * p3 * (1-p4) * (1-p5) * p6* (1-p7),            #4: 0110010
-          "0010010" = (1-p1) * (1-p2) * p3 * (1-p4) * (1-p5) * p6 * (1-p7),       #5: 0010010
-          "0001100" = (1-p1) * (1-p2) * (1-p3) * p4 * p5 * (1-p6) * (1-p7),       #6: 0001100
-          "0001000" = (1-p1) * (1-p2) * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),    #7: 0001000
-          "0001010" = (1-p1) * (1-p2) * (1-p3) * p4 * (1-p5) * p6 * (1-p7),       #8: 0001010
-          "0100010" = (1-p1) * p2 * (1-p3) * (1-p4) * (1-p5) * p6 * (1-p7),       #9: 0100010
-          "1101010" = p1 * p2 * (1-p3) * p4 * (1-p5) * p6 * (1-p7),               #10: 1101010
-          "1101100" = p1 * p2 * (1-p3) * p4 * p5 * (1-p6)* (1-p7),                #11: 1101100
-          "0101100" = (1-p1) * p2 * (1-p3) * p4 * p5 * (1-p6)* (1-p7),            #12: 0101100
-          "1001000" = p1 * (1-p2) * (1-p3) * p4 * (1-p5) * (1-p6) * (1-p7),       #13: 1001000
-          "1101000" = p1 * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),            #14: 1101000
-          "0101000" = (1-p1) * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* (1-p7),        #15: 0101000
-          "0101001" = (1-p1) * p2 * (1-p3) * p4 * (1-p5) * (1-p6)* p7,            #16: 0101001
-          "1001010" = p1 * (1-p2) * (1-p3) * p4 * (1-p5) * p6 * (1-p7),           #17: 1001010
-          "1100000" = p1 * p2 * (1-p3) * (1-p4) * (1-p5) * (1-p6)* (1-p7),        #18: 1100000
-          "1000000" = p1 * (1-p2) * (1-p3) * (1-p4) * (1-p5) * (1-p6) * (1-p7)    #19: 1000000
+
+    cbind("0010000" = p1 * (1-p2) * (1-p3) * (1-p4),    #1: 1000    
+          "0110000" = (1-p1) * (1-p2) * p3 * (1-p4),    #2: 0010
+          "0100000" = p1 * p2 * (1-p3) * p4,            #3: 1101
+          "0110010" = p1 * p2 * (1-p3) * (1-p4),        #4: 1100
+          "0010010" = (1-p1) * (1-p2) *(1-p3) * p4,     #5: 0001
+          "0001100" = (1-p1) * p2 * p3 * (1-p4),        #6: 0110
+          "0001000" = (1-p1) * p2 * (1-p3) * (1-p4)     #7: 0100
+
     )
 }
 
