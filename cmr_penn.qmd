@@ -164,8 +164,8 @@ kable(bull_frog_visits)
 
 first_bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  select(!c(site, c(visit_4:visit_6))) %>% 
-  slice(2:4)
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(site, c(visit_4:visit_6)))
 
 second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>% 
   ungroup() %>% 
@@ -203,8 +203,8 @@ backTransform(fm1_bf3, "det")
 
 first_bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  select(!c(site, c(visit_3:visit_6))) %>% 
-  slice(2:4)
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(site, c(visit_3:visit_6))) 
 
 second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>% 
   ungroup() %>% 
@@ -276,8 +276,7 @@ kable(green_frog_visits)
 
 first_green_frog_unmarked_nmixture <- green_frog_visits %>%  
   ungroup() %>% 
-  select(!c(site, c(visit_4:visit_6))) %>% 
-  slice(1:3) 
+  select(!c(site, c(visit_4:visit_6))) 
 
 second_green_frog_unmarked_nxmixture <- green_frog_visits %>% 
  ungroup() %>% 
@@ -306,7 +305,7 @@ backTransform(fm1_g3, "det")
 ```
 $~$
 
-#### Assuming the sites and enviro variables are exactly the same we estimate there is 25.42 +-9.83 frogs at each sites and with 31% of detecting each  individual when 3 repeat visits occur nightly.
+#### Assuming the sites and enviro variables are exactly the same we estimate there is 24.42 +-9.67 frogs at each sites and with 31% of detecting each  individual when 3 repeat visits occur nightly.
 
 \newpage
 
@@ -345,7 +344,7 @@ backTransform(fm1_g2, "det")
 ```
 $~$
 
-#### Assuming the sites and enviro variables are exactly the same we estimate there is 25.42 +-9.83 frogs at each sites and with 31% of detecting each  individual when 3 repeat visits occur nightly.
+#### Assuming the sites and enviro variables are exactly the same we estimate there is 45.37 +-50.33 frogs at each sites and with 17% of detecting each  individual when 3 repeat visits occur nightly.
 
 \newpage
 
@@ -388,6 +387,22 @@ cmr_raw_visits <-dbGetQuery(connection, visit_cmr_q) %>%
 #write_csv(cmr_raw_visits, here("data", "cmr_raw_visits.csv"))
 ```
 
+## Visualize all CMR Visits
+```{r}
+
+viz <- cmr_raw_visits %>% 
+  group_by(site) %>% 
+  summarise(n = n())
+
+ggplot(data = viz) +
+  geom_col(aes(x=site, y = n)) +
+  ggtitle("Raw Visits") +
+  theme(axis.text.x = element_text(angle = 90))
+  
+
+```
+
+
 ## Bullfrog CMR data
 ### Matrix: individual counts by visits
 ```{r}
@@ -426,16 +441,18 @@ clean_bull <- bull_pop_zeros %>%
   #                         !is.na(lag(.)), 0, .))) %>% 
   #select(sort(names(.))) %>% 
   #filter(!site == "tryon_weber") %>% 
-  select(!site) %>% 
+  unite(species_capture, c("site", "species_capture"), sep = "_", na.rm = T) %>% 
   mutate_all(~replace_na(.,0)) 
   
   
 ```
 
-### Final CMR matrix
+### Final CMR matrix - 3 repeat Visits
 ```{r}
 
-clean_bull$captureHistory <- paste(clean_bull$visit_1, clean_bull$visit_2, clean_bull$visit_3,
+clean_bull_3 <- clean_bull
+
+clean_bull_3$captureHistory <- paste(clean_bull_3$visit_1, clean_bull_3$visit_2, clean_bull_3$visit_3,
                                sep = "")
 
 # clean_bull <- clean_bull %>% 
@@ -443,20 +460,20 @@ clean_bull$captureHistory <- paste(clean_bull$visit_1, clean_bull$visit_2, clean
 #   group_by(species_capture, captureHistory) %>% 
 #   unique()
 
-lev <- unique(clean_bull$captureHistory)
+lev <- unique(clean_bull_3$captureHistory)
 
-clean_bull$captureHistory <- factor(clean_bull$captureHistory, levels = lev)
+clean_bull_3$captureHistory <- factor(clean_bull_3$captureHistory, levels = lev)
 
-bull_table <- table(clean_bull$species_capture, clean_bull$captureHistory)
+bull_table_3 <- table(clean_bull_3$species_capture, clean_bull_3$captureHistory)
   
 
-kable(head(bull_table, n = 15))
+kable(head(bull_table_3, n = 15))
 
 ```
 
 ### obs covariates, piFun equal detection, Model runn
 ```{r}
-class(bull_table) <- "matrix"
+class(bull_table_3) <- "matrix"
 
 o2y <- matrix(1, 3, 6)
 
@@ -476,15 +493,68 @@ crPiFun <- function(p) {
 }
 
 
-umf <- unmarkedFrameMPois(y = bull_table, piFun = "crPiFun", obsToY = o2y)
+umf_3 <- unmarkedFrameMPois(y = bull_table_3, piFun = "crPiFun", obsToY = o2y)
 
-fm <- multinomPois(~1 ~1, umf, engine = "R")
+fm_3 <- multinomPois(~1 ~1, umf_3, engine = "R")
 
-backTransform(fm, "state")
-backTransform(fm, "det")
+backTransform(fm_3, "state")
+backTransform(fm_3, "det")
 ```
 
-#### Assuming sites are identical we estimate there are 3 individuals at each site? With a 26% chance of detecting each individual?  Not fully sure how to interpret results. 
+#### Assuming sites are identical we estimate there are 1.86 individuals at each site? With a 26% chance of detecting each individual?  Not fully sure how to interpret results. 
+
+\newpage
+
+### Final CMR matrix - 2 repeat Visits
+```{r}
+
+clean_bull_2 <- clean_bull
+
+clean_bull_2$captureHistory <- paste(clean_bull_2$visit_1, clean_bull_2$visit_2,
+                               sep = "")
+
+# clean_bull <- clean_bull %>% 
+#   ungroup() %>% 
+#   group_by(species_capture, captureHistory) %>% 
+#   unique()
+
+lev <- unique(clean_bull_2$captureHistory)
+
+clean_bull_2$captureHistory <- factor(clean_bull_2$captureHistory, levels = lev)
+
+bull_table_2 <- table(clean_bull_2$species_capture, clean_bull_2$captureHistory)
+  
+
+kable(head(bull_table_2, n = 15))
+
+```
+
+### obs covariates, piFun equal detection, Model runn
+```{r}
+class(bull_table_2) <- "matrix"
+
+o2y <- matrix(1, 2, 4)
+
+crPiFun <- function(p) {
+    p1 <- p[,1]
+    p2 <- p[,2]
+
+    cbind("10" = p1 * (1-p2),        #1: 10    
+          "01" = p1 * (1-p2),        #2: 01
+          "00" = (1-p1) * (1-p2),    #3: 00
+          "11" = p1 * p2             #4: 11
+          
+    )
+}
+
+
+umf_2 <- unmarkedFrameMPois(y = bull_table_2, piFun = "crPiFun", obsToY = o2y)
+
+fm_2 <- multinomPois(~1 ~1, umf_2, engine = "R")
+
+backTransform(fm_2, "state")
+backTransform(fm_2, "det")
+```
 
 \newpage
 
@@ -495,43 +565,43 @@ backTransform(fm, "det")
 #### Filter data for `pseudacris_crucifer`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited.
 ```{r}
 
-peep_frog_visits <- nmix_clean_up %>% 
-  select(site, date, species_ves, n) %>% 
-  filter(species_ves == "pseudacris_crucifer") %>% 
-  select(!species_ves) %>% 
-  group_by(site) %>% 
-  mutate(n_visit = match(date, unique(date)),
-         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
-  select(!date) %>% 
-  ungroup() %>%
-  pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
-  group_by(site) %>% 
-  mutate(across(contains("visit"), 
-                ~ifelse(is.na(.) &
-                          !is.na(lag(.)), 0, .)))
-
-
-kable(peep_frog_visits)
+# peep_frog_visits <- nmix_clean_up %>% 
+#   select(site, date, species_ves, n) %>% 
+#   filter(species_ves == "pseudacris_crucifer") %>% 
+#   select(!species_ves) %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!date) %>% 
+#   ungroup() %>%
+#   pivot_wider(names_from = c("n_visit"), values_from = c("n"))%>% 
+#   group_by(site) %>% 
+#   mutate(across(contains("visit"), 
+#                 ~ifelse(is.na(.) &
+#                           !is.na(lag(.)), 0, .)))
+# 
+# 
+# kable(peep_frog_visits)
 
 ```
 
 ### static n-mixture model no covariates
 ```{r}
-peep_unmarked_nmixture <- peep_frog_visits %>% 
-  ungroup() %>% 
-  #filter(capture_type == "new") %>% 
-  select(!c(site)) 
-
-
-umf <- unmarkedFramePCount(y = peep_unmarked_nmixture)
-
-summary(umf)
-
-fm1 <- pcount(~1 ~1, data = umf)
-
-backTransform(fm1, "state") 
-
-backTransform(fm1, "det")
+# peep_unmarked_nmixture <- peep_frog_visits %>% 
+#   ungroup() %>% 
+#   #filter(capture_type == "new") %>% 
+#   select(!c(site)) 
+# 
+# 
+# umf <- unmarkedFramePCount(y = peep_unmarked_nmixture)
+# 
+# summary(umf)
+# 
+# fm1 <- pcount(~1 ~1, data = umf)
+# 
+# backTransform(fm1, "state") 
+# 
+# backTransform(fm1, "det")
 
 
 
@@ -547,27 +617,27 @@ backTransform(fm1, "det")
 
 ```{r}
 
-leop_frog_visits <- nmix_clean_up %>% 
-  select(site, date, species_ves, n) %>% 
-  filter(species_ves == "rana_pipiens") %>% 
-  #select(!species_capture) %>% 
-  group_by(site) %>% 
-  mutate(n_visit = match(date, unique(date)),
-         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
-  select(!date) %>% 
-  ungroup() %>%
-  group_by(site, n_visit, ) %>% 
-  summarise(n = sum(n)) %>% 
-  ungroup() %>% 
-  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
-  #add_row(site = "phelps_pond", capture_type = "recapture") %>% 
-  group_by(site) %>% 
-  mutate(across(contains("visit"), 
-                ~ifelse(is.na(.) &
-                          !is.na(lag(.)), 0, .))) 
-
-
-kable(leop_frog_visits)
+# leop_frog_visits <- nmix_clean_up %>% 
+#   select(site, date, species_ves, n) %>% 
+#   filter(species_ves == "rana_pipiens") %>% 
+#   #select(!species_capture) %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!date) %>% 
+#   ungroup() %>%
+#   group_by(site, n_visit, ) %>% 
+#   summarise(n = sum(n)) %>% 
+#   ungroup() %>% 
+#   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+#   #add_row(site = "phelps_pond", capture_type = "recapture") %>% 
+#   group_by(site) %>% 
+#   mutate(across(contains("visit"), 
+#                 ~ifelse(is.na(.) &
+#                           !is.na(lag(.)), 0, .))) 
+# 
+# 
+# kable(leop_frog_visits)
 
 ```
 
@@ -575,20 +645,20 @@ kable(leop_frog_visits)
 
 ```{r}
 
-leop_frog_unmarked_nmixture <- leop_frog_visits %>% 
-  ungroup() %>% 
-  select(!c(site)) 
-
-
-umf <- unmarkedFramePCount(y = leop_frog_unmarked_nmixture)
-
-summary(umf)
-
-fm1 <- pcount(~1 ~1, data = umf)
-
-backTransform(fm1, "state") 
-
-backTransform(fm1, "det")
+# leop_frog_unmarked_nmixture <- leop_frog_visits %>% 
+#   ungroup() %>% 
+#   select(!c(site)) 
+# 
+# 
+# umf <- unmarkedFramePCount(y = leop_frog_unmarked_nmixture)
+# 
+# summary(umf)
+# 
+# fm1 <- pcount(~1 ~1, data = umf)
+# 
+# backTransform(fm1, "state") 
+# 
+# backTransform(fm1, "det")
 
 
 
