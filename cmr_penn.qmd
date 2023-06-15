@@ -484,7 +484,7 @@ backTransform(fm, "state")
 backTransform(fm, "det")
 ```
 
-#### Assuming sites are identical we estimate there are 8 individuals at each site? With a 30% chance of detecting each individual?  Not fully sure how to interpret results. 
+#### Assuming sites are identical we estimate there are 3 individuals at each site? With a 26% chance of detecting each individual?  Not fully sure how to interpret results. 
 
 \newpage
 
