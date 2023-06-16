@@ -425,15 +425,28 @@ bull_pop_zeros <- cmr_raw_visits %>%
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
   select(!date) %>% 
   ungroup() 
+
+remove_4_6 <- bull_pop_zeros %>% 
+  filter(n_visit %in% c("visit_4", "visit_5", "visit_6")) %>% 
+  mutate(site = if_else(site == "rv_pond", "rv_pond_2", site),
+         n_visit = if_else(n_visit == "visit_4", "visit_1", n_visit),
+         n_visit = if_else(n_visit == "visit_5", "visit_2", n_visit),
+         n_visit = if_else(n_visit == "visit_6", "visit_3", n_visit))
+
+bull_pop_zeros <- bull_pop_zeros %>% 
+  filter(!n_visit %in% c("visit_4", "visit_5", "visit_6"))
   
+
+bull_pop_zeros <- rbind(bull_pop_zeros,remove_4_6)  
+
 clean_bull <- bull_pop_zeros %>%   
   group_by(site, species_capture, n_visit) %>% 
   reframe(n = n()) %>% 
   mutate(n = if_else(is.na(species_capture), NA, n)) %>% 
-  drop_na(species_capture) %>%
   pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  drop_na(species_capture) %>%
   #select(!c(visit_5, visit_6)) %>% 
-  # relocate(visit_1, .before = visit_2) %>% 
+  #relocate(visit_5, .before = visit_6) %>% 
   # relocate(visit_3, .after = visit_2) %>% 
   
   # mutate(across(contains("visit"), 
@@ -475,7 +488,7 @@ kable(head(bull_table_3, n = 15))
 ```{r}
 class(bull_table_3) <- "matrix"
 
-o2y <- matrix(1, 3, 6)
+o2y <- matrix(1, 3, 5)
 
 crPiFun <- function(p) {
     p1 <- p[,1]
@@ -483,11 +496,10 @@ crPiFun <- function(p) {
     p3 <- p[,3]
 
     cbind("100" = p1 * (1-p2) * (1-p3),    #1: 100    
-          "010" = p1 * (1-p2) * (1-p3),    #2: 010
+          "010" = (1-p1) * p2 * (1-p3),    #2: 010
           "001" = (1-p1) * (1-p2) * p3,    #3: 001
-          "111" = p1 * p2 * p3,            #4: 111
-          "110" = p1 * p2 * (1-p3),        #5: 110
-          "011" = (1-p1) * p2 * p3         #6: 011
+          "111" = p1 * p2 * (1-p3),        #4: 110
+          "110" = (1-p1) * p2 * p3         #5: 011
           
     )
 }
