@@ -510,7 +510,7 @@ umf_3 <- unmarkedFrameMPois(y = bull_table_3, piFun = "crPiFun", obsToY = o2y)
 fm_3 <- multinomPois(~1 ~1, umf_3, engine = "R")
 
 backTransform(fm_3, "state")
-backTransform(fm_3, "det")
+backTransform(fm_3, "det") 
 ```
 
 #### Assuming sites are identical we estimate there are 1.86 individuals at each site? With a 26% chance of detecting each individual?  Not fully sure how to interpret results. 
