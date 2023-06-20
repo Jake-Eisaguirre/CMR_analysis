@@ -12,7 +12,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally)
 
 ```
 
@@ -46,8 +46,8 @@ dbExecute(connection, "set search_path to survey_data")
 ```{r}
 
 # Data
-nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes, 
-          v2.species_ves, v2.count
+nmix_q <- "select r.region, s.site, s.area_sqr_m, v.date, v.survey_time, s2.duration_minutes, 
+          v2.species_ves, v2.count, v2.observer, s2.air_temp_c, s2.water_temp_c, s2.wind, s2.sky, s2.relative_humidity_percent
           from region r
           join site s on r.region_id = s.region_id 
           full join visit v on s.site_id = v.site_id 
@@ -57,7 +57,7 @@ nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           and v.date > '2023-01-01';"
 
 nmix_raw_data <- dbGetQuery(connection, nmix_q) %>% 
-  select(!c(region, survey_time, duration_minutes)) %>% 
+  select(!c(region, survey_time)) %>% 
   arrange(date) 
 
 #write_csv(nmix_raw_data, here("data", "nmix_raw_data.csv"))
@@ -159,6 +159,239 @@ kable(bull_frog_visits)
 
 ```
 
+### covariates
+```{r}
+#| warning: false 
+
+# obs covariates
+n_mix_obs_cov_mid <- nmix_raw_data %>% 
+  filter(species_ves %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+                                "rana_clamitans", "rana_pipiens")) %>% 
+  group_by(date, site) %>% 
+  reframe(duration_minutes = mean(duration_minutes), 
+         air_temp_c = mean(air_temp_c),
+         water_temp_c = mean(water_temp_c),
+         area_sqr_m = mean(area_sqr_m),
+         wind = wind,
+         sky = sky,
+         rh = relative_humidity_percent) %>% 
+  group_by(date, site) %>% 
+  unique()
+
+# exlude: water_temp
+ggpairs(n_mix_obs_cov_mid, progress = F, columns = 3:9)
+
+
+
+# site covariatesar
+area <- nmix_raw_data %>% 
+  filter(species_ves %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+                                "rana_clamitans", "rana_pipiens")) %>% 
+  group_by(site) %>% 
+  reframe(area_sqr_m) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  add_row(site = "rv_pond_2", area_sqr_m = 1306) %>% 
+  select(!c(site)) %>% 
+  mutate(area_sqr_m = (area_sqr_m - min(area_sqr_m))/ (max(area_sqr_m) - min(area_sqr_m))) %>% 
+  as.data.frame()
+ 
+  
+  
+
+```
+
+#### duration_minutes
+```{r}
+
+# duration minutes survey
+f_duration_mins <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m, wind, sky, rh)) %>% 
+  mutate(duration_minutes = (duration_minutes - min(duration_minutes))/ (max(duration_minutes) - min(duration_minutes))) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("duration_minutes")) %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(visit_4:visit_6, site))
+
+t_duration_mins <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m, wind, sky, rh)) %>% 
+  mutate(duration_minutes = (duration_minutes - min(duration_minutes))/ (max(duration_minutes) - min(duration_minutes))) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("duration_minutes")) %>% 
+  ungroup() %>% 
+  filter(site == "rv_pond") %>% 
+  select(c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6)
+
+duration_mins <- rbind(f_duration_mins, t_duration_mins)
+```
+
+#### Wind - Category
+```{r}
+
+# duration minutes survey
+f_wind <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m,duration_minutes , sky, rh)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("wind")) %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(visit_4:visit_6, site))
+
+t_wind <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m, duration_minutes, sky, rh)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("wind")) %>% 
+  ungroup() %>% 
+  filter(site == "rv_pond") %>% 
+  select(c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6)
+
+wind <- rbind(f_wind, t_wind)
+
+
+```
+
+#### Sky - category
+```{r}
+# duration minutes survey
+f_sky <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m,duration_minutes , wind, rh)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("sky")) %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(visit_4:visit_6, site))
+
+t_sky <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(air_temp_c, water_temp_c,date, area_sqr_m, duration_minutes, wind, rh)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("sky")) %>% 
+  ungroup() %>% 
+  filter(site == "rv_pond") %>% 
+  select(c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6)
+
+sky <- rbind(f_sky, t_sky)
+```
+
+
+#### water temp - REMOVE Correlated
+```{r}
+# f_water <- n_mix_obs_cov_mid %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!c(air_temp_c, duration_minutes,date, area_sqr_m, wind, sky, rh)) %>% 
+#   pivot_wider(names_from = c("n_visit"), values_from = c("water_temp_c")) %>% 
+#   ungroup() %>% 
+#   filter(!site == "wood_lab_pond") %>% 
+#   select(!c(visit_4:visit_6, site))
+# 
+# t_water <- n_mix_obs_cov_mid %>% 
+#   group_by(site) %>% 
+#   mutate(n_visit = match(date, unique(date)),
+#          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+#   select(!c(air_temp_c,duration_minutes ,date, area_sqr_m, wind, sky, rh)) %>% 
+#   pivot_wider(names_from = c("n_visit"), values_from = c("water_temp_c")) %>% 
+#   ungroup() %>% 
+#   filter(site == "rv_pond") %>% 
+#   select(c(visit_4:visit_6)) %>% 
+#   rename(visit_1 = visit_4,
+#          visit_2 = visit_5,
+#          visit_3 = visit_6)
+# 
+# water <- rbind(f_water, t_water)
+
+```
+
+#### air temp
+```{r}
+
+f_air <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(water_temp_c, duration_minutes,date, area_sqr_m, wind, sky, rh)) %>%
+  mutate(air_temp_c = (air_temp_c - min(air_temp_c))/ (max(air_temp_c) - min(air_temp_c))) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c( "air_temp_c")) %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(visit_4:visit_6, site))
+
+t_air <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(water_temp_c,duration_minutes ,date, area_sqr_m, wind, sky, rh)) %>% 
+  mutate(air_temp_c = (air_temp_c - min(air_temp_c))/ (max(air_temp_c) - min(air_temp_c))) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("air_temp_c")) %>% 
+  ungroup() %>% 
+  filter(site == "rv_pond") %>% 
+  select(c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6)
+
+air <- rbind(f_air, t_air)
+  
+
+```
+
+#### RH Percent
+
+```{r}
+
+f_rh <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(water_temp_c, duration_minutes,date, area_sqr_m, wind, sky, air_temp_c)) %>% 
+  mutate(rh = (rh - min(rh))/ (max(rh) - min(rh))) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c( "rh")) %>% 
+  ungroup() %>% 
+  filter(!site == "wood_lab_pond") %>% 
+  select(!c(visit_4:visit_6, site))
+
+t_rh <- n_mix_obs_cov_mid %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!c(water_temp_c,duration_minutes ,date, area_sqr_m, wind, sky, air_temp_c)) %>% 
+  mutate(rh = (rh - min(rh))/ (max(rh) - min(rh))) %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("rh")) %>% 
+  ungroup() %>% 
+  filter(site == "rv_pond") %>% 
+  select(c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6)
+
+rh <- rbind(f_rh, t_rh)
+  
+
+```
+
 ### Bullfrog static n-mixture models no covariates - 3 repeat sites
 ```{r}
 
@@ -178,19 +411,29 @@ second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>%
 
 bull_frog_nmixture_3_visits <- rbind(first_bull_frog_unmarked_nmixture, second_bull_frog_unmarked_nxmixture)
 
-bf_umf_3 <- unmarkedFramePCount(y = bull_frog_nmixture_3_visits)
+
+bf_umf_3 <- unmarkedFramePCount(y = bull_frog_nmixture_3_visits, 
+                                obsCovs = list(survey_minutes = duration_mins,
+                                               #water_temp = water,
+                                               air_temp = air,
+                                               sky = sky,
+                                               wind = wind,
+                                               rh = rh),
+                                siteCovs = area)
 
 summary(bf_umf_3)
 
-fm1_bf3 <- pcount( ~ 1 ~ 1, 
+fm1_bf3 <- pcount( ~ survey_minutes  + air_temp + sky + wind + rh ~ area_sqr_m, 
                data = bf_umf_3, 
-               engine = "R")
+               engine = "R",
+               control=list(trace=T, REPORT=5))
 
 summary(fm1_bf3)
 
 backTransform(fm1_bf3, "state")
 
 backTransform(fm1_bf3, "det")
+
 
 
 ```
@@ -678,4 +921,115 @@ backTransform(fm_2, "det")
 
 \newpage
 
+```{r}
+
+# Choose sample sizes and prepare observed data array y
+set.seed(1)
+M <- 100
+J <- 3
+C <- matrix(NA, nrow = M, ncol = J) # to contain the observed data
+
+
+vegHt <- sort(runif(M, -1, 1)) # sort for graphical convenience
+
+beta0 <- 0 # Log-scale intercept
+beta1 <- 2 # Log-scale slope for vegHt
+lambda <- exp(beta0 + beta1 * vegHt) 
+
+N <- rpois(M, lambda) 
+
+wind <- array(runif(M * J, -1, 1), dim = c(M, J))
+
+time <- matrix(rep(as.character(1:J), M), ncol = J, byrow = TRUE)
+hab <- c(rep("A", 33), rep("B", 33), rep("C", 34))
+
+a <- data.frame(vegHt = vegHt, hab = hab)
+
+b <- list(time = time, wind = wind)
+
+```
+
+```{r}
+# Simulate data
+set.seed(35)
+nSites <- 100
+nVisits <- 3
+x <- rnorm(nSites) # a covariate
+beta0 <- 0
+beta1 <- 1
+lambda <- exp(beta0 + beta1*x) # expected counts at each site
+N <- rpois(nSites, lambda) # latent abundance
+y <- matrix(NA, nSites, nVisits)
+p <- c(0.3, 0.6, 0.8) # detection prob for each visit
+for(j in 1:nVisits) {
+y[,j] <- rbinom(nSites, N, p[j])
+}
+# Organize data
+visitMat <- matrix(as.character(1:nVisits), nSites, nVisits, byrow=TRUE)
+umf <- unmarkedFramePCount(y=y, siteCovs=data.frame(x=x),
+obsCovs=list(visit=visitMat))
+summary(umf)
+# Fit a model
+fm1 <- pcount(~visit-1 ~ x, umf, K=50)
+fm1
+```
+
+```{r}
+alfl.covs <- read.csv(system.file("csv", "alflCovs.csv",
+    package="unmarked"), row.names=1)
+
+intervalMat <- matrix(c('1','2','3'), 50, 3, byrow=TRUE)
+class(alfl.H1) <- "matrix"
+umf.cr1 <- unmarkedFrameMPois(y=alfl.H1,
+    siteCovs=alfl.covs[,c("woody", "struct", "time.1", "date.1")],
+    obsCovs=list(interval=intervalMat),
+    obsToY=o2y, piFun="crPiFun")
+
+
+```
+
+```{r}
+data(mallard)
+mallardUMF <- unmarkedFramePCount(mallard.y, siteCovs = mallard.site,
+obsCovs = mallard.obs)
+(fm.mallard <- pcount(~ ivel+ date + I(date^2) ~ length + elev + forest, mallardUMF, K=30))
+(fm.mallard.nb <- pcount(~ date + I(date^2) ~ length + elev, mixture = "NB", mallardUMF, K=30))
+
+
+```
+
+```{r}
+# Fake data
+R <- 4 # number of sites
+J <- 3 # number of visits
+y <- matrix(c(
+   1,2,0,
+   0,0,0,
+   1,1,1,
+   2,2,1), nrow=R, ncol=J, byrow=TRUE)
+y
+
+site.covs <- data.frame(x1=1:4, x2=factor(c('A','B','A','B')))
+site.covs
+
+obs.covs <- list(
+   x3 = matrix(c(
+      -1,0,1,
+      -2,0,0,
+      -3,1,0,
+      0,0,0), nrow=R, ncol=J, byrow=TRUE),
+   x4 = matrix(c(
+      'a','b','c',
+      'd','b','a',
+      'a','a','c',
+      'a','b','a'), nrow=R, ncol=J, byrow=TRUE))
+obs.covs
+
+umf <- unmarkedFramePCount(y=y, siteCovs=site.covs, 
+    obsCovs=obs.covs)          # organize data
+umf                            # take a l
+summary(umf)                   # summarize data
+fm <- pcount(~1 ~1, umf, K=10) # fit a model
+      
+```
 
