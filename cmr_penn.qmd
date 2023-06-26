@@ -12,7 +12,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, DMwR)
 
 ```
 
@@ -449,12 +449,25 @@ summary(best_bf3)
 
 backTransform(best_bf3, "state")
 
+# residual check
+bf3_res <- residuals(best_bf3) %>% 
+  as.data.frame()
+
+qqnorm(bf3_res$visit_1)
+qqnorm(bf3_res$visit_2)
+qqnorm(bf3_res$visit_3)
+
 lambad.hat <- predict(best_bf3, type = "state")
 p.hat <- predict(best_bf3, type = "det")
 
-pred_data <- data.frame(air_temp = seq(-1, 1, , 10))
 
-predict(best_bf3, type = "det", newdata = pred_data, append = T)
+
+pred_data <- data.frame(air_temp = seq(-3, 3, , 30))
+
+predicted_air_temp <- predict(best_bf3, type = "det", newdata = pred_data, append = T)
+
+
+plot(Predicted ~ air_temp, predicted_air_temp, type = "o")
 
 ```
 #### Assuming the sites and enviro variables are exactly the same we can say there is 18.08 +-4.48 frogs at each site with 65 % chance of detecting each individual when 3 repeat visits occur nightly.
