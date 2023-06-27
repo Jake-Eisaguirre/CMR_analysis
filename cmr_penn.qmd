@@ -445,7 +445,6 @@ best_bf3 <- pcount( ~ air_temp ~ 1,
                engine = "R",
                control=list(trace=T, REPORT=5))
 
-summary(best_bf3)
 
 backTransform(best_bf3, "state")
 
@@ -457,15 +456,10 @@ qqnorm(bf3_res$visit_1)
 qqnorm(bf3_res$visit_2)
 qqnorm(bf3_res$visit_3)
 
-lambad.hat <- predict(best_bf3, type = "state")
-p.hat <- predict(best_bf3, type = "det")
-
-
 
 pred_data <- data.frame(air_temp = seq(-0.761, 1.55, , 10))
 
-predicted_air_temp <- predict(best_bf3, type = "state", newdata = pred_data, append = T)
-
+predicted_air_temp <- predict(best_bf3, type = "det", newdata = pred_data, append = T)
 
 plot(Predicted ~ air_temp, predicted_air_temp, type = "o")
 
