@@ -12,7 +12,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, DMwR)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, AICcmodavg)
 
 ```
 
@@ -186,8 +186,9 @@ n_mix_obs_cov_mid <- nmix_raw_data %>%
   #        rh = scale(rh))
 
 # exlude: water_temp
-ggpairs(n_mix_obs_cov_mid, progress = F, columns = 3:9)
+ggpairs(n_mix_obs_cov_mid[,-9], progress = F, columns = 3:8)
 
+#columns = 3:9
 
 
 # site covariatesar
@@ -437,10 +438,10 @@ fm1_bf3 <- pcount( ~ survey_minutes  + air_temp + rh + sky + wind ~ area_sqr_m,
 
 summary(fm1_bf3)
 
-# ~ air_temp ~ 1 best model?
+# ~ air_temp + wind ~ 1 best model?
 dredge(fm1_bf3, beta = "none")
 
-best_bf3 <- pcount( ~ air_temp ~ 1, 
+best_bf3 <- pcount( ~ air_temp + wind ~ 1, 
                data = bf_umf_3, 
                engine = "R",
                control=list(trace=T, REPORT=5))
@@ -449,12 +450,7 @@ best_bf3 <- pcount( ~ air_temp ~ 1,
 backTransform(best_bf3, "state")
 
 # residual check
-bf3_res <- residuals(best_bf3) %>% 
-  as.data.frame()
-
-qqnorm(bf3_res$visit_1)
-qqnorm(bf3_res$visit_2)
-qqnorm(bf3_res$visit_3)
+AICcmodavg::Nmix.gof.test(best_bf3)
 
 
 pred_data <- data.frame(air_temp = seq(-0.761, 1.55, , 10))
@@ -464,7 +460,41 @@ predicted_air_temp <- predict(best_bf3, type = "det", newdata = pred_data, appen
 plot(Predicted ~ air_temp, predicted_air_temp, type = "o")
 
 ```
-#### Assuming the sites and enviro variables are exactly the same we can say there is 18.08 +-4.48 frogs at each site with 65 % chance of detecting each individual when 3 repeat visits occur nightly.
+### Bullfrog glm possion models no covariates - 3 repeat sites
+```{r}
+
+glm_data <- cbind(bull_frog_nmixture_3_visits, area)
+
+# visit 1
+v_1_data <- glm_data %>% 
+  select(visit_1, area_sqr_m)
+
+v_1 <- glm(visit_1 ~ area_sqr_m, data = v_1_data, family = poisson(link = "log"))
+v_1
+exp(v_1$coefficients[1])
+
+# visit 2
+v_2_data <- glm_data %>% 
+  select(visit_2, area_sqr_m)
+
+v_2 <- glm(visit_2 ~ area_sqr_m, data = v_2_data, family = poisson(link = "log"))
+v_2
+exp(v_2$coefficients[1])
+
+
+# visit 3
+v_3_data <- glm_data %>% 
+  select(visit_3, area_sqr_m)
+
+v_3 <- glm(visit_3 ~ area_sqr_m, data = v_3_data, family = poisson(link = "log"))
+v_3
+exp(v_3$coefficients[1])
+
+
+
+```
+
+
 
 \newpage
 
@@ -487,33 +517,44 @@ second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>%
 bull_frog_nmixture_2_visits <- rbind(first_bull_frog_unmarked_nmixture, second_bull_frog_unmarked_nxmixture)
 
 bf_umf_2 <- unmarkedFramePCount(y = bull_frog_nmixture_2_visits,
-                                obsCovs = list(survey_minutes = duration_mins[,1:2],
+                                obsCovs = list(survey_minutes = duration_mins[1:4,1:2],
                                                #water_temp = water,
-                                               air_temp = air[,1:2],
-                                               sky = sky[,1:2],
-                                               wind = wind[,1:2],
-                                               rh = rh[,1:2]),
+                                               air_temp = air[1:4,1:2],
+                                               sky = sky[1:4,1:2],
+                                               wind = wind[1:4,1:2]),
+                                               #rh = rh[1:4,1:2]),
                                 siteCovs = area)
 
 summary(bf_umf_2)
 
-fm1_bf2 <- pcount( ~ survey_minutes  + air_temp + rh + sky + wind ~ area_sqr_m, 
+fm1_bf2 <- pcount( ~ survey_minutes  + air_temp + sky + wind ~ area_sqr_m, 
                data = bf_umf_2, 
                engine = "R",
                control=list(trace=T, REPORT=5))
 
 dredge(fm1_bf2, beta = "none")
 
-best_bf2 <- pcount( ~ air_temp ~ 1, 
+# Best model: ~survey_minutes ~area_sqr_m
+best_bf2 <- pcount( ~ survey_minutes ~ area_sqr_m, 
                data = bf_umf_2, 
                engine = "R",
                control=list(trace=T, REPORT=5))
 
 summary(best_bf2)
 
-backTransform(fm1_bf2, "state")
+backTransform(best_bf2, "state")
 
-backTransform(fm1_bf2, "det")
+bf2_res <- residuals(best_bf2) %>% 
+  as.data.frame()
+
+qqnorm(bf2_res$visit_1)
+qqnorm(bf2_res$visit_2)
+
+pred_data <- data.frame(survey_minutes = seq(-1.52, 1.15, , 10))
+
+predicted_dur_min <- predict(best_bf2, type = "state", newdata = pred_data, append = T)
+
+plot(Predicted ~ survey_minutes, predicted_dur_min, type = "o")
 
 
 ```
