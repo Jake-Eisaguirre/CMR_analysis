@@ -449,6 +449,8 @@ best_bf3 <- pcount( ~ air_temp + wind ~ 1,
 
 backTransform(best_bf3, "state")
 
+plogis(43.8)
+
 # residual check
 AICcmodavg::Nmix.gof.test(best_bf3)
 
@@ -535,7 +537,7 @@ fm1_bf2 <- pcount( ~ survey_minutes  + air_temp + sky + wind ~ area_sqr_m,
 dredge(fm1_bf2, beta = "none")
 
 # Best model: ~survey_minutes ~area_sqr_m
-best_bf2 <- pcount( ~ survey_minutes ~ area_sqr_m, 
+best_bf2 <- pcount( ~ survey_minutes + wind ~ 1, 
                data = bf_umf_2, 
                engine = "R",
                control=list(trace=T, REPORT=5))
