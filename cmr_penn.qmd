@@ -729,7 +729,7 @@ cmr_q <- "select r.region, s.site, v.date, v.survey_time, s2.duration_minutes,
           full join visit v on s.site_id = v.site_id 
           join survey s2 on v.visit_id = s2.visit_id 
           join capture c on s2.survey_id = c.survey_id
-          join penn_cmr cmr on c.capture_mark_recapture = cmr.capture_mark_recapture
+          join cmr cmr on c.capture_mark_recapture = cmr.capture_mark_recapture
           where r.region = 'pennsylvania'
           and v.date > '2023-01-01';"
 
@@ -867,8 +867,8 @@ crPiFun <- function(p) {
     cbind("100" = p1 * (1-p2) * (1-p3),    #1: 100    
           "010" = (1-p1) * p2 * (1-p3),    #2: 010
           "001" = (1-p1) * (1-p2) * p3,    #3: 001
-          "111" = p1 * p2 * (1-p3),        #4: 110
-          "110" = (1-p1) * p2 * p3         #5: 011
+          "110" = p1 * p2 * (1-p3),        #4: 110
+          "011" = (1-p1) * p2 * p3         #5: 011
           
     )
 }

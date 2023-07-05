@@ -39,6 +39,57 @@ tryCatch({
 #search path
 dbExecute(connection, "set search_path to survey_data")
 
+```
 
+## Query Panama n-mix data
+```{r}
+
+n_mix_q <- "select l.location, r.region, s.site, v.date, v.survey_time,
+s2.transect, s2.detection_type, v2.species_ves, v2.count
+from location l
+join region r on l.location_id = r.location_id 
+join site s on r.region_id = s.region_id 
+join visit v on s.site_id = v.site_id 
+join survey s2 on v.visit_id = s2.visit_id 
+join ves v2 on s2.survey_id = v2.survey_id
+where l.location = 'panama';"
+
+nmix_raw_data <- dbGetQuery(connection, n_mix_q) %>% 
+  select(!c(region, location)) %>%
+  #mutate(count = replace_na(count, 1)) %>% 
+  arrange(date) %>% 
+  group_by(date, site, survey_time, species_ves) %>% 
+  summarise(n = sum(count)) %>% 
+  filter(!species_ves %in% c("unknown", "unknown_species", NA))
+
+
+# find all visits
+visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.detection_type, s2.observer
+                from location l
+                join region r on l.location_id = r.location_id
+                join site s on r.region_id = s.region_id 
+                join visit v on s.site_id = v.site_id 
+                join survey s2 on v.visit_id = s2.visit_id
+                where l.location = 'panama'
+                and s2.detection_type = 'visual';"
+
+nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
+  arrange(date) %>% 
+  select(site, date)
 
 ```
+
+## Populate zeroes
+```{r}
+
+# populate site zeros
+nmix_clean_up <- nmix_raw_visits %>% 
+  left_join(nmix_raw_data) 
+
+# %>%
+#   complete(nesting(date, site), 
+#            species_ves = unique(nmix_raw_data$species_ves), 
+#            fill = list(n = 0))
+
+```
+
