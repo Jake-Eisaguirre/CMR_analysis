@@ -52,10 +52,11 @@ join site s on r.region_id = s.region_id
 join visit v on s.site_id = v.site_id 
 join survey s2 on v.visit_id = s2.visit_id 
 join ves v2 on s2.survey_id = v2.survey_id
-where l.location = 'panama';"
+where l.location = 'panama'
+and v2.life_stage = 'adult';"
 
 nmix_raw_data <- dbGetQuery(connection, n_mix_q) %>% 
-  select(!c(region, location)) %>%
+  select(!c(region, location, life_stage)) %>%
   #mutate(count = replace_na(count, 1)) %>% 
   arrange(date) 
   
@@ -125,7 +126,8 @@ washy_table <- nmix_clean_up %>%
   mutate(across(contains("visit"), 
                 ~ifelse(is.na(.) &
                           !is.na(lag(.)), 0, .))) %>% 
-  ungroup()
+  ungroup() %>% 
+  select(!site)
 
 
 ```
@@ -143,7 +145,11 @@ fm1_washy <- pcount( ~1  ~1,
                engine = "R",
                control=list(trace=T, REPORT=5))
 
-summary(fm1_bf3)
+summary(fm1_washy)
+
+backTransform(fm1_washy, "state")
+backTransform(fm1_washy, "det")
+
 
 ```
 
