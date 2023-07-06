@@ -45,7 +45,7 @@ dbExecute(connection, "set search_path to survey_data")
 ```{r}
 
 n_mix_q <- "select l.location, r.region, s.site, v.date, v.survey_time,
-s2.transect, s2.detection_type, v2.species_ves, v2.count
+s2.transect, s2.detection_type, v2.species_ves, v2.count, v2.life_stage
 from location l
 join region r on l.location_id = r.location_id 
 join site s on r.region_id = s.region_id 
@@ -57,10 +57,8 @@ where l.location = 'panama';"
 nmix_raw_data <- dbGetQuery(connection, n_mix_q) %>% 
   select(!c(region, location)) %>%
   #mutate(count = replace_na(count, 1)) %>% 
-  arrange(date) %>% 
-  group_by(date, site, survey_time, species_ves) %>% 
-  summarise(n = sum(count)) %>% 
-  filter(!species_ves %in% c("unknown", "unknown_species", NA))
+  arrange(date) 
+  
 
 
 # find all visits
@@ -82,14 +80,70 @@ nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
 ## Populate zeroes
 ```{r}
 
+spec_filt <- nmix_raw_data %>% 
+  filter(species_ves %in% c("silverstoneia_flotator", "lithobates_warszewitschii", 
+                            "colostethus_panamensis")) %>% 
+  ungroup() %>% 
+  group_by(date, site, species_ves) %>% 
+  summarise(n = sum(count))
+
+
 # populate site zeros
 nmix_clean_up <- nmix_raw_visits %>% 
-  left_join(nmix_raw_data) 
+  left_join(spec_filt) %>%
+  complete(nesting(date, site),
+           species_ves = unique(spec_filt$species_ves),
+           fill = list(n = 0)) %>% 
+  drop_na(species_ves) %>% 
+  mutate(month = month(date),
+         season = if_else(month > 8, "season_2", "season_1"),
+         season = if_else(month %in% c(1, 2), "season_2", season),
+         site = paste(site, season, sep = "_")) %>% 
+  select(!c(month, season))
 
-# %>%
-#   complete(nesting(date, site), 
-#            species_ves = unique(nmix_raw_data$species_ves), 
-#            fill = list(n = 0))
+```
+
+
+## lithobates_warszewitschii
+### Table Formatting
+```{r}
+
+washy_table <- nmix_clean_up %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "lithobates_warszewitschii") %>% 
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup()
+
+
+```
+
+
+### model
+```{r}
+
+washy_umf <- unmarkedFramePCount(y = washy_table)
+
+summary(washy_umf)
+
+fm1_washy <- pcount( ~1  ~1, 
+               data = washy_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_bf3)
 
 ```
 
