@@ -18,6 +18,7 @@ librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtr
 ```
 
 ## Connect to `survey_data` schema in `ribbitr` database
+
 ```{r}
 #| output: false
 tryCatch({
@@ -42,6 +43,7 @@ dbExecute(connection, "set search_path to survey_data")
 ```
 
 ## Query Panama n-mix data
+
 ```{r}
 
 n_mix_q <- "select l.location, r.region, s.site, v.date, v.survey_time,
@@ -74,11 +76,25 @@ visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.
 
 nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
   arrange(date) %>% 
-  select(site, date)
+  select(site, date, survey_time)
+
+
+# Most commone sites where VES was conducted
+site_visits <- nmix_raw_visits %>% 
+  group_by(site) %>% 
+  summarize(n = sum(n()))
+
+
+# silverstoneia_flotator, lithobates_warszewitschii, and colostethus_panamensis most common species
+species_count <- nmix_raw_data %>% 
+  group_by(species_ves) %>% 
+  summarize(n = sum(count))
+
 
 ```
 
 ## Populate zeroes
+
 ```{r}
 
 spec_filt <- nmix_raw_data %>% 
@@ -104,14 +120,66 @@ nmix_clean_up <- nmix_raw_visits %>%
 
 ```
 
-
 ## lithobates_warszewitschii
+
 ### Table Formatting
+
 ```{r}
 
 washy_table <- nmix_clean_up %>% 
   select(site, date, species_ves, n) %>% 
   filter(species_ves == "lithobates_warszewitschii") %>% 
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>%
+  select(!site)
+
+
+```
+
+### model
+
+```{r}
+
+washy_umf <- unmarkedFramePCount(y = washy_table)
+
+summary(washy_umf)
+
+fm1_washy <- pcount( ~1  ~1, 
+               data = washy_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_washy)
+
+backTransform(fm1_washy, "state")
+backTransform(fm1_washy, "det")
+
+
+```
+
+
+## colostethus_panamensis
+
+### Table Formatting
+
+```{r}
+
+col_table <- nmix_clean_up %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "colostethus_panamensis") %>% 
   select(!species_ves) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
@@ -132,16 +200,16 @@ washy_table <- nmix_clean_up %>%
 
 ```
 
-
 ### model
+
 ```{r}
 
-washy_umf <- unmarkedFramePCount(y = washy_table)
+col_umf <- unmarkedFramePCount(y = col_table)
 
-summary(washy_umf)
+summary(col_umf)
 
-fm1_washy <- pcount( ~1  ~1, 
-               data = washy_umf, 
+fm1_col <- pcount( ~1  ~1, 
+               data = col_umf, 
                engine = "R",
                control=list(trace=T, REPORT=5))
 
@@ -150,6 +218,56 @@ summary(fm1_washy)
 backTransform(fm1_washy, "state")
 backTransform(fm1_washy, "det")
 
+```
+
+## silverstoneia_flotator
+
+### Table Formatting
+
+```{r}
+
+flo_table <- nmix_clean_up %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "silverstoneia_flotator") %>% 
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>% 
+  select(!site)
+
 
 ```
 
+### model
+
+```{r}
+
+flo_umf <- unmarkedFramePCount(y = flo_table)
+
+summary(flo_umf)
+
+fm1_flo <- pcount( ~1  ~1, 
+               data = flo_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_flo)
+
+backTransform(fm1_washy, "state")
+backTransform(fm1_washy, "det")
+
+
+
+
+```
