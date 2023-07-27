@@ -55,14 +55,17 @@ join visit v on s.site_id = v.site_id
 join survey s2 on v.visit_id = s2.visit_id 
 join ves v2 on s2.survey_id = v2.survey_id
 where l.location = 'panama'
-and v2.life_stage = 'adult';"
+and v2.life_stage = 'adult'
+and v.survey_time = 'day';"
 
 nmix_raw_data <- dbGetQuery(connection, n_mix_q) %>% 
   select(!c(region, location, life_stage)) %>%
   #mutate(count = replace_na(count, 1)) %>% 
   arrange(date) 
-  
 
+# t <- nmix_raw_data %>% 
+#   group_by(species_capture) %>% 
+#   summarise(n = sum(n()))
 
 # find all visits
 visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.detection_type, s2.observer
@@ -72,16 +75,17 @@ visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.
                 join visit v on s.site_id = v.site_id 
                 join survey s2 on v.visit_id = s2.visit_id
                 where l.location = 'panama'
-                and s2.detection_type = 'visual';"
+                and s2.detection_type = 'visual'
+                and v.survey_time = 'day';"
 
 nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
   arrange(date) %>% 
   select(site, date, survey_time)
 
 
-# Most commone sites where VES was conducted
+# Most common sites where VES was conducted
 site_visits <- nmix_raw_visits %>% 
-  group_by(site) %>% 
+  group_by(site, survey_time) %>% 
   summarize(n = sum(n()))
 
 
@@ -101,6 +105,7 @@ spec_filt <- nmix_raw_data %>%
   filter(species_ves %in% c("silverstoneia_flotator", "lithobates_warszewitschii", 
                             "colostethus_panamensis")) %>% 
   ungroup() %>% 
+  filter(!count > 99) %>%  # remove obvious tadpole count
   group_by(date, site, species_ves) %>% 
   summarise(n = sum(count))
 
@@ -120,16 +125,21 @@ nmix_clean_up <- nmix_raw_visits %>%
 
 ```
 
+# Season 2
+
 ## lithobates_warszewitschii
 
-### Table Formatting
+### Table Formatting - 3 visits
 
 ```{r}
 
 washy_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
   select(site, date, species_ves, n) %>% 
   filter(species_ves == "lithobates_warszewitschii") %>% 
   select(!species_ves) %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -144,7 +154,8 @@ washy_table <- nmix_clean_up %>%
                 ~ifelse(is.na(.) &
                           !is.na(lag(.)), 0, .))) %>% 
   ungroup() %>%
-  select(!site)
+  select(!c(site, year, visit_4, visit_5)) %>% 
+  filter(!is.na(visit_3))
 
 
 ```
@@ -171,15 +182,70 @@ backTransform(fm1_washy, "det")
 ```
 
 
+### Table Formatting - 2 visits
+
+```{r}
+
+washy_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "lithobates_warszewitschii") %>% 
+  select(!species_ves) %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>%
+  select(!c(site, year, visit_4, visit_5, visit_3)) %>% 
+  filter(!is.na(visit_2))
+
+
+```
+
+### model
+
+```{r}
+
+washy_umf <- unmarkedFramePCount(y = washy_table)
+
+summary(washy_umf)
+
+fm1_washy <- pcount( ~1  ~1, 
+               data = washy_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_washy)
+
+backTransform(fm1_washy, "state")
+backTransform(fm1_washy, "det")
+
+
+```
+
 ## colostethus_panamensis
 
-### Table Formatting
+### Table Formatting - 3 visits
 
 ```{r}
 
 col_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
   select(site, date, species_ves, n) %>% 
   filter(species_ves == "colostethus_panamensis") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
   select(!species_ves) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
@@ -195,7 +261,8 @@ col_table <- nmix_clean_up %>%
                 ~ifelse(is.na(.) &
                           !is.na(lag(.)), 0, .))) %>% 
   ungroup() %>% 
-  select(!site)
+  select(!c(site, year, visit_4, visit_5)) %>% 
+  filter(!is.na(visit_3))
 
 
 ```
@@ -213,22 +280,23 @@ fm1_col <- pcount( ~1  ~1,
                engine = "R",
                control=list(trace=T, REPORT=5))
 
-summary(fm1_washy)
+summary(fm1_col)
 
-backTransform(fm1_washy, "state")
-backTransform(fm1_washy, "det")
+backTransform(fm1_col, "state")
+backTransform(fm1_col, "det")
 
 ```
 
-## silverstoneia_flotator
-
-### Table Formatting
+### Table Formatting - 2 visits
 
 ```{r}
 
-flo_table <- nmix_clean_up %>% 
+col_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
   select(site, date, species_ves, n) %>% 
-  filter(species_ves == "silverstoneia_flotator") %>% 
+  filter(species_ves == "colostethus_panamensis") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
   select(!species_ves) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
@@ -244,7 +312,61 @@ flo_table <- nmix_clean_up %>%
                 ~ifelse(is.na(.) &
                           !is.na(lag(.)), 0, .))) %>% 
   ungroup() %>% 
-  select(!site)
+  select(!c(site, year, visit_4, visit_5, visit_3)) %>% 
+  filter(!is.na(visit_2))
+
+
+```
+
+### model
+
+```{r}
+
+col_umf <- unmarkedFramePCount(y = col_table)
+
+summary(col_umf)
+
+fm1_col <- pcount( ~1  ~1, 
+               data = col_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_col)
+
+backTransform(fm1_col, "state")
+backTransform(fm1_col, "det")
+
+```
+
+## silverstoneia_flotator
+
+### Table Formatting - 3 visits
+
+```{r}
+
+flo_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "silverstoneia_flotator") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>%
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>% 
+  select(!c(site, year, visit_4, visit_5)) %>% 
+  filter(!is.na(visit_3))
 
 
 ```
@@ -264,10 +386,233 @@ fm1_flo <- pcount( ~1  ~1,
 
 summary(fm1_flo)
 
-backTransform(fm1_washy, "state")
-backTransform(fm1_washy, "det")
+backTransform(fm1_flo, "state")
+backTransform(fm1_flo, "det")
 
 
 
 
 ```
+
+
+### Table Formatting - 2 visits
+
+```{r}
+
+flo_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_2")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "silverstoneia_flotator") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>%
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>% 
+  select(!c(site, year, visit_4, visit_5, visit_3)) %>% 
+  filter(!is.na(visit_2))
+
+
+```
+
+### model
+
+```{r}
+
+flo_umf <- unmarkedFramePCount(y = flo_table)
+
+summary(flo_umf)
+
+fm1_flo <- pcount( ~1  ~1, 
+               data = flo_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_flo)
+
+backTransform(fm1_flo, "state")
+backTransform(fm1_flo, "det")
+
+
+
+
+```
+
+# Season 1
+
+## lithobates_warszewitschii
+
+### Table Formatting 
+
+```{r}
+
+washy_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_1")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "lithobates_warszewitschii") %>% 
+  select(!species_ves) %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>%
+  select(!c(site, year))
+
+
+```
+
+### model
+
+```{r}
+
+washy_umf <- unmarkedFramePCount(y = washy_table)
+
+summary(washy_umf)
+
+fm1_washy <- pcount( ~1  ~1, 
+               data = washy_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_washy)
+
+backTransform(fm1_washy, "state")
+backTransform(fm1_washy, "det")
+
+
+```
+
+
+
+## colostethus_panamensis
+
+### Table Formatting
+
+```{r}
+
+col_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_1")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "colostethus_panamensis") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>% 
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>% 
+  select(!c(site, year))
+
+
+```
+
+### model
+
+```{r}
+
+col_umf <- unmarkedFramePCount(y = col_table)
+
+summary(col_umf)
+
+fm1_col <- pcount( ~1  ~1, 
+               data = col_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_col)
+
+backTransform(fm1_col, "state")
+backTransform(fm1_col, "det")
+
+```
+
+## silverstoneia_flotator
+
+### Table Formatting
+
+```{r}
+
+flo_table <- nmix_clean_up %>% 
+  filter(str_detect(site, "season_1")) %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "silverstoneia_flotator") %>% 
+  mutate(year = year(date),
+         site = paste(year, site, sep = "_")) %>%
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  group_by(site, date) %>% 
+  unique() %>% 
+  ungroup() %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .))) %>% 
+  ungroup() %>% 
+  select(!c(site, year))
+
+
+```
+
+### model
+
+```{r}
+
+flo_umf <- unmarkedFramePCount(y = flo_table)
+
+summary(flo_umf)
+
+fm1_flo <- pcount( ~1  ~1, 
+               data = flo_umf, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_flo)
+
+backTransform(fm1_flo, "state")
+backTransform(fm1_flo, "det")
+
+
+
+
+```
+
+
+
+
