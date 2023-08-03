@@ -45,8 +45,8 @@ dbExecute(connection, "set search_path to survey_data")
 ## Query Panama n-mix data
 
 ```{r}
-
-n_mix_q <- "select l.location, r.region, s.site, v.date, v.survey_time,
+#capture
+n_mix_q_c <- "select l.location, r.region, s.site, v.date, v.survey_time,
 s2.transect, s2.detection_type, v2.species_capture, v2.life_stage
 from location l
 join region r on l.location_id = r.location_id 
@@ -58,10 +58,35 @@ where l.location = 'panama'
 and v2.life_stage = 'adult'
 and v.survey_time = 'day';"
 
-nmix_raw_data <- dbGetQuery(connection, n_mix_q) %>% 
+nmix_raw_data_c <- dbGetQuery(connection, n_mix_q_c) %>% 
   select(!c(region, location, life_stage)) %>%
   #mutate(count = replace_na(count, 1)) %>% 
-  arrange(date) 
+  arrange(date) %>% 
+  rename(species = species_capture)
+
+#VES
+n_mix_q_v <- "select l.location, r.region, s.site, v.date, v.survey_time,
+s2.transect, s2.detection_type, v2.species_ves, v2.count, v2.life_stage
+from location l
+join region r on l.location_id = r.location_id 
+join site s on r.region_id = s.region_id 
+join visit v on s.site_id = v.site_id 
+join survey s2 on v.visit_id = s2.visit_id 
+join ves v2 on s2.survey_id = v2.survey_id
+where l.location = 'panama'
+and v2.life_stage = 'adult'
+and v.survey_time = 'day';"
+
+nmix_raw_data_v <- dbGetQuery(connection, n_mix_q_v) %>% 
+  select(!c(region, location, life_stage)) %>%
+  mutate(count = replace_na(count, 1)) %>% 
+  filter(!count == 100) %>% 
+  arrange(date) %>% 
+  group_by(site, date, species_ves) %>% 
+  summarise(n = sum(count)) %>% 
+  filter(species_ves %in% c("lithobates_warszewitschii", "silverstoneia_flotator", 
+                            "colostethus_panamensis", "rhaebo_haematiticus")) %>% 
+  rename(species = species_ves)
 
 
 
@@ -78,7 +103,7 @@ visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.
 
 nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
   arrange(date) %>%
-  select(site, date, survey_time)
+  select(site, date)
 
 
 # Most common sites where VES was conducted
@@ -93,28 +118,34 @@ species_count <- nmix_raw_data %>%
   summarize(n = n())
 
 
+
 ```
+
 
 ## Populate zeroes
 
 ```{r}
 
-spec_filt <- nmix_raw_data %>% 
-  filter(species_capture %in% c("lithobates_warszewitschii", "silverstoneia_flotator", 
+spec_filt <- nmix_raw_data_c %>% 
+  filter(species %in% c("lithobates_warszewitschii", "silverstoneia_flotator", 
                             "colostethus_panamensis", "rhaebo_haematiticus")) %>% 
   ungroup() %>% 
-  #filter() %>%  # remove obvious tadpole count
-  group_by(date, site, species_capture) %>% 
-  summarise(n = n())
+  group_by(date, site, species) %>% 
+  summarise(n = n())  %>% 
+  rbind(nmix_raw_data_v) %>% 
+  ungroup() %>%
+  group_by(date, site, species) %>% 
+  summarise(n = sum(n))
+  
 
 
 # populate site zeros
 nmix_clean_up <- nmix_raw_visits %>% 
   left_join(spec_filt) %>%
   complete(nesting(date, site),
-           species_capture = unique(spec_filt$species_capture),
+           species = unique(spec_filt$species),
            fill = list(n = 0)) %>% 
-  drop_na(species_capture) %>% 
+  drop_na(species) %>% 
   mutate(month = month(date),
          season = if_else(month > 8, "season_2", "season_1"),
          season = if_else(month %in% c(1, 2), "season_2", season),
@@ -133,9 +164,9 @@ nmix_clean_up <- nmix_raw_visits %>%
 # 3 visits
 rha_table_3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rhaebo_haematiticus") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "rhaebo_haematiticus") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -158,9 +189,9 @@ rha_table_3 <- nmix_clean_up %>%
 # 2 visits
 rha_table_2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rhaebo_haematiticus") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "rhaebo_haematiticus") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -227,9 +258,9 @@ backTransform(fm1_rha_2, "det")
 # 3 visits
 washy_table_3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "lithobates_warszewitschii") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "lithobates_warszewitschii") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -252,9 +283,9 @@ washy_table_3 <- nmix_clean_up %>%
 # 2 visits
 washy_table_2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "lithobates_warszewitschii") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "lithobates_warszewitschii") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -313,7 +344,6 @@ backTransform(fm1_washy_2, "det")
 
 ```
 
-
 ## colostethus_panamensis
 
 ### Table Formatting
@@ -323,11 +353,11 @@ backTransform(fm1_washy_2, "det")
 # 3 visits
 col_table_3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "colostethus_panamensis") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "colostethus_panamensis") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -348,11 +378,11 @@ col_table_3 <- nmix_clean_up %>%
 # 2 visits
 col_table_2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "colostethus_panamensis") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "colostethus_panamensis") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -410,7 +440,6 @@ backTransform(fm1_col_2, "det")
 
 ```
 
-
 ## silverstoneia_flotator
 
 ### Table Formatting
@@ -420,11 +449,11 @@ backTransform(fm1_col_2, "det")
 # 3 visits
 flo_table_3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "silverstoneia_flotator") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "silverstoneia_flotator") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>%
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -445,11 +474,11 @@ flo_table_3 <- nmix_clean_up %>%
 # 2 visits
 flo_table_2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "silverstoneia_flotator") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "silverstoneia_flotator") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>%
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -506,7 +535,6 @@ backTransform(fm1_flo_2, "det")
 
 ```
 
-
 # Season 1
 
 ## rhaebo_haematiticus
@@ -517,9 +545,9 @@ backTransform(fm1_flo_2, "det")
 # 3 visits
 rha_table.3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_1")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rhaebo_haematiticus") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "rhaebo_haematiticus") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -541,10 +569,10 @@ rha_table.3 <- nmix_clean_up %>%
 
 # 2 visits
 rha_table.2 <- nmix_clean_up %>% 
-  filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "rhaebo_haematiticus") %>% 
-  select(!species_capture) %>% 
+  filter(str_detect(site, "season_1")) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "rhaebo_haematiticus") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -612,9 +640,9 @@ backTransform(fm1_rha.2, "det")
 # 3 visits
 washy_table.3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_1")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "lithobates_warszewitschii") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "lithobates_warszewitschii") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -637,9 +665,9 @@ washy_table.3 <- nmix_clean_up %>%
 # 2 visits
 washy_table.2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "lithobates_warszewitschii") %>% 
-  select(!species_capture) %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "lithobates_warszewitschii") %>% 
+  select(!species) %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
   group_by(site) %>% 
@@ -707,11 +735,11 @@ backTransform(fm1_washy.2, "det")
 # 3 visits
 col_table.3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_1")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "colostethus_panamensis") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "colostethus_panamensis") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -732,11 +760,11 @@ col_table.3 <- nmix_clean_up %>%
 # 2 visits
 col_table.2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_2")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "colostethus_panamensis") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "colostethus_panamensis") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>% 
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -801,11 +829,11 @@ backTransform(fm1_col.2, "det")
 # 3 visits
 flo_table.3 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_1")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "silverstoneia_flotator") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "silverstoneia_flotator") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>%
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -826,11 +854,11 @@ flo_table.3 <- nmix_clean_up %>%
 # 2 visits
 flo_table.2 <- nmix_clean_up %>% 
   filter(str_detect(site, "season_1")) %>% 
-  select(site, date, species_capture, n) %>% 
-  filter(species_capture == "silverstoneia_flotator") %>% 
+  select(site, date, species, n) %>% 
+  filter(species == "silverstoneia_flotator") %>% 
   mutate(year = year(date),
          site = paste(year, site, sep = "_")) %>%
-  select(!species_capture) %>% 
+  select(!species) %>% 
   group_by(site) %>% 
   mutate(n_visit = match(date, unique(date)),
          n_visit = paste0("visit_", n_visit, sep = "")) %>% 
@@ -890,8 +918,11 @@ backTransform(fm1_flo.2, "det")
 
 
 ```
+
 # Create table of result
+
 ## Washies
+
 ```{r}
 # season 2
 
@@ -899,4 +930,3 @@ backTransform(fm1_flo.2, "det")
 
 
 ```
-
