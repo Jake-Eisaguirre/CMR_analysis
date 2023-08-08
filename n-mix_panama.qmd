@@ -13,7 +13,7 @@ if (!require(librarian)){
   library(librarian)
 }
 
-librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, AICcmodavg)
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, AICcmodavg, openxlsx)
 
 ```
 
@@ -103,7 +103,10 @@ visit_nmix_q <- "select l.location, r.region, s.site, v.date, v.survey_time, s2.
 
 nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>%
   arrange(date) %>%
-  select(site, date)
+  select(site, date) %>% 
+  filter(site %in% c("altos_de_piedra", "campana_loop", "cerro_negro", "farallon", "guabal",
+                     "jordinal", "mata_ahogado", "medina", "rabbit_stream", "rio_blanco", 
+                     "rio_maria", "rio_tigrero", "sophia_stream", "sora"))
 
 
 # Most common sites where VES was conducted
@@ -113,11 +116,9 @@ site_visits <- nmix_raw_visits %>%
 
 
 # silverstoneia_flotator, lithobates_warszewitschii, and colostethus_panamensis most common species
-species_count <- nmix_raw_data %>% 
-  group_by(species_capture, survey_time) %>% 
-  summarize(n = n())
-
-
+# species_count <- nmix_raw_data %>% 
+#   group_by(species_capture, survey_time) %>% 
+#   summarize(n = n())
 
 ```
 
@@ -134,7 +135,10 @@ spec_filt <- nmix_raw_data_c %>%
   rbind(nmix_raw_data_v) %>% 
   ungroup() %>%
   group_by(date, site, species) %>% 
-  summarise(n = sum(n))
+  summarise(n = sum(n)) %>% 
+  filter(site %in% c("altos_de_piedra", "campana_loop", "cerro_negro", "farallon", "guabal",
+                     "jordinal", "mata_ahogado", "medina", "rabbit_stream", "rio_blanco", 
+                     "rio_maria", "rio_tigrero", "sophia_stream", "sora"))
   
 
 
