@@ -116,10 +116,11 @@ n_mix_mid_clean_up <- nmix_raw_data %>%
 
 # populate zeros
 nmix_clean_up <- n_mix_mid_clean_up %>% 
-  #left_join(n_mix_mid_clean_up) %>%
+  full_join(nmix_raw_visits) %>%
   complete(nesting(date, site), 
            species_ves = unique(n_mix_mid_clean_up$species_ves), 
-           fill = list(n = 0))
+           fill = list(n = 0)) %>% 
+  drop_na(species_ves)
 
 
 
@@ -405,11 +406,12 @@ rh <- rbind(f_rh, t_rh)
 
 first_bull_frog_unmarked_nmixture <- bull_frog_visits %>% 
   ungroup() %>% 
-  filter(!site == "wood_lab_pond") %>% 
+  filter(!site %in% c("wood_lab_pond", "admin_pond", "phelps_pond")) %>% 
   select(!c(site, c(visit_4:visit_6)))
 
 second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>% 
   ungroup() %>% 
+  filter(!site %in% c("wood_lab_pond", "admin_pond", "phelps_pond")) %>% 
   select(site, c(visit_4:visit_6)) %>% 
   slice(2) %>% 
   rename(visit_1 = visit_4,
@@ -449,7 +451,8 @@ best_bf3 <- pcount( ~ air_temp + wind ~ 1,
 
 backTransform(best_bf3, "state")
 
-plogis(43.8)
+plogis(coef(best_bf3, type = "det"))
+
 
 # residual check
 AICcmodavg::Nmix.gof.test(best_bf3)
@@ -545,6 +548,7 @@ best_bf2 <- pcount( ~ survey_minutes + wind ~ 1,
 summary(best_bf2)
 
 backTransform(best_bf2, "state")
+plogis(coef(best_bf2, type = "det"))
 
 bf2_res <- residuals(best_bf2) %>% 
   as.data.frame()
@@ -645,7 +649,7 @@ best_g3 <- pcount(~survey_minutes + air_temp + rh ~ 1,
                   control=list(trace=T, REPORT=5))
 
 backTransform(best_g3, "state") 
-
+plogis(coef(best_g3, type = "det"))
 backTransform(fm1_g3, "det")
 
 
@@ -705,6 +709,7 @@ best_g2 <- pcount(~ survey_minutes  + air_temp + rh ~ 1,
 
 
 backTransform(best_g2, "state") 
+plogis(coef(best_g2, type = "det"))
 
 backTransform(best_g2, "det")
 
