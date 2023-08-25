@@ -942,6 +942,172 @@ backTransform(fm_2, "state")
 backTransform(fm_2, "det")
 ```
 
+# CMR tuttle_pond
+```{r}
+bull_mid_clean_up <- cmr_raw_data %>% 
+  filter(species_capture == "rana_catesbeiana",
+         site == "tuttle_pond") %>% 
+  select(!c(capture_type)) %>% 
+  unite(species_capture, c(species_capture, cmr_id), sep = "_")
+  
+bull_pop_zeros <- cmr_raw_visits %>% 
+  filter(site == "tuttle_pond") %>% 
+  left_join(bull_mid_clean_up) %>%
+  complete(nesting(date, site), 
+           fill = list(n = 0)) %>% 
+  ungroup() %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() 
+
+remove_4_6 <- bull_pop_zeros %>% 
+  filter(n_visit %in% c("visit_4", "visit_5", "visit_6")) %>% 
+  mutate(site = if_else(site == "rv_pond", "rv_pond_2", site),
+         n_visit = if_else(n_visit == "visit_4", "visit_1", n_visit),
+         n_visit = if_else(n_visit == "visit_5", "visit_2", n_visit),
+         n_visit = if_else(n_visit == "visit_6", "visit_3", n_visit))
+
+bull_pop_zeros <- bull_pop_zeros %>% 
+  filter(!n_visit %in% c("visit_4", "visit_5", "visit_6"))
+  
+
+bull_pop_zeros <- rbind(bull_pop_zeros,remove_4_6)  
+
+clean_bull <- bull_pop_zeros %>%   
+  group_by(site, species_capture, n_visit) %>% 
+  reframe(n = n()) %>% 
+  mutate(n = if_else(is.na(species_capture), NA, n)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  drop_na(species_capture) %>%
+  unite(species_capture, c("site", "species_capture"), sep = "_", na.rm = T) %>% 
+  mutate_all(~replace_na(.,0)) %>% 
+  relocate(visit_1, .before=  visit_2)
+
+clean_bull_3 <- clean_bull
+
+clean_bull_3$captureHistory <- paste(clean_bull_3$visit_1, clean_bull_3$visit_2, clean_bull_3$visit_3,
+                               sep = "")
+
+
+lev <- unique(clean_bull_3$captureHistory)
+
+clean_bull_3$captureHistory <- factor(clean_bull_3$captureHistory, levels = lev)
+
+bull_table_3 <- table(clean_bull_3$species_capture, clean_bull_3$captureHistory)
+  
+
+class(bull_table_3) <- "matrix"
+
+o2y <- matrix(1, 3, 3)
+
+crPiFun <- function(p) {
+    p1 <- p[,1]
+    p2 <- p[,2]
+    p3 <- p[,3]
+
+    cbind("100" = (1-p1) * p2 * p3,        #1: 011    
+          "010" = (1-p1) * p2 * (1-p3),    #2: 010
+          "001" = (1-p1) * (1-p2) * p3    #3: 001
+          
+          
+    )
+}
+
+
+umf_3 <- unmarkedFrameMPois(y = bull_table_3, piFun = "crPiFun", obsToY = o2y)
+
+fm_3 <- multinomPois(~1 ~1, umf_3, engine = "R")
+
+backTransform(fm_3, "state")
+backTransform(fm_3, "det") 
+```
+
+
+## CMR RV Pond - Dont think this work
+```{r}
+bull_mid_clean_up <- cmr_raw_data %>% 
+  filter(species_capture == "rana_catesbeiana",
+         site == "rv_pond") %>% 
+  select(!c(capture_type)) %>% 
+  unite(species_capture, c(species_capture, cmr_id), sep = "_")
+  
+bull_pop_zeros <- cmr_raw_visits %>% 
+  filter(site == "rv_pond") %>% 
+  left_join(bull_mid_clean_up) %>%
+  complete(nesting(date, site), 
+           fill = list(n = 0)) %>% 
+  ungroup() %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() 
+
+remove_4_6 <- bull_pop_zeros %>% 
+  filter(n_visit %in% c("visit_4", "visit_5", "visit_6")) %>% 
+  mutate(site = if_else(site == "rv_pond", "rv_pond_2", site),
+         n_visit = if_else(n_visit == "visit_4", "visit_1", n_visit),
+         n_visit = if_else(n_visit == "visit_5", "visit_2", n_visit),
+         n_visit = if_else(n_visit == "visit_6", "visit_3", n_visit))
+
+bull_pop_zeros <- bull_pop_zeros %>% 
+  filter(!n_visit %in% c("visit_4", "visit_5", "visit_6"))
+  
+
+bull_pop_zeros <- rbind(bull_pop_zeros,remove_4_6)  
+
+clean_bull <- bull_pop_zeros %>%   
+  group_by(site, species_capture, n_visit) %>% 
+  reframe(n = n()) %>% 
+  mutate(n = if_else(is.na(species_capture), NA, n)) %>% 
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>%
+  drop_na(species_capture) %>%
+  unite(species_capture, c("site", "species_capture"), sep = "_", na.rm = T) %>% 
+  mutate_all(~replace_na(.,0)) %>% 
+  relocate(visit_1, .before=  visit_2)
+
+clean_bull_3 <- clean_bull
+
+clean_bull_3$captureHistory <- paste(clean_bull_3$visit_1, clean_bull_3$visit_2, clean_bull_3$visit_3,
+                               sep = "")
+
+
+lev <- unique(clean_bull_3$captureHistory)
+
+clean_bull_3$captureHistory <- factor(clean_bull_3$captureHistory, levels = lev)
+
+bull_table_3 <- table(clean_bull_3$species_capture, clean_bull_3$captureHistory)
+  
+
+class(bull_table_3) <- "matrix"
+
+o2y <- matrix(1, 3, 3)
+
+crPiFun <- function(p) {
+    p1 <- p[,1]
+    p2 <- p[,2]
+    p3 <- p[,3]
+
+    cbind("100" = (1-p1) * p2 * p3,        #1: 011    
+          "010" = (1-p1) * p2 * (1-p3),    #2: 010
+          "001" = (1-p1) * (1-p2) * p3    #3: 001
+          
+          
+    )
+}
+
+
+umf_3 <- unmarkedFrameMPois(y = bull_table_3, piFun = "crPiFun", obsToY = o2y)
+
+fm_3 <- multinomPois(~1 ~1, umf_3, engine = "R")
+
+backTransform(fm_3, "state")
+backTransform(fm_3, "det") 
+```
+
+
 \newpage
 
 # STOP: Species Not detected in 2023 data for VES
