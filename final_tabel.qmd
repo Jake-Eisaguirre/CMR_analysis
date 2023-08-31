@@ -1,0 +1,297 @@
+---
+title: "N-Mix_Samples"
+format: html
+editor: visual
+---
+
+## Load Packages
+
+```{r}
+#| output: false
+if (!require(librarian)){
+  install.packages("librarian")
+  library(librarian)
+}
+
+librarian::shelf(tidyverse, RPostgres, DBI, unmarked, here, lubridate, kableExtra, GGally, MuMIn, AHMbook, AICcmodavg)
+
+```
+
+## Connect to `survey_data` schema in `ribbitr` database
+```{r}
+#| output: false
+tryCatch({
+    drv <- dbDriver("Postgres")
+    print("Connecting to Database…")
+    connection <- dbConnect(drv,
+                 dbname = Sys.getenv("aws_dbname"),
+                 host = Sys.getenv("aws_host"),
+                 port = Sys.getenv("aws_port"),
+                 user = Sys.getenv("aws_user"),
+                 password = Sys.getenv("aws_password"),
+                 timezone=NULL)
+    print("Database Connected!")
+    },
+    error=function(cond) {
+            print("Unable to connect to Database.")
+    })
+
+#search path
+dbExecute(connection, "set search_path to survey_data")
+
+
+
+```
+
+## Query 2022 N-Mix Penn data
+```{r}
+
+# Data
+nmix_q <- "select r.region, s.site, s.area_sqr_m, v.date, v.survey_time, s2.duration_minutes, 
+          v2.species_ves, v2.count, v2.observer, s2.air_temp_c, s2.water_temp_c, s2.wind, s2.sky, s2.relative_humidity_percent
+          from region r
+          join site s on r.region_id = s.region_id 
+          full join visit v on s.site_id = v.site_id 
+          join survey s2 on v.visit_id = s2.visit_id 
+          join ves v2 on s2.survey_id = v2.survey_id
+          where r.region = 'pennsylvania'
+          and v.date > '2023-01-01';"
+
+nmix_raw_data <- dbGetQuery(connection, nmix_q) %>% 
+  select(!c(region, survey_time)) %>% 
+  arrange(date) 
+
+#write_csv(nmix_raw_data, here("data", "nmix_raw_data.csv"))
+
+
+
+# find all visits
+visit_nmix_q <- "select r.region, s.site, v.date, v.survey_time, s2.detection_type, s2.observer
+                from region r
+                join site s on r.region_id = s.region_id 
+                join visit v on s.site_id = v.site_id 
+                join survey s2 on v.visit_id = s2.visit_id
+                where r.region = 'pennsylvania'
+                and v.date > '2023-01-01'
+                and s2.detection_type = 'visual';"
+
+nmix_raw_visits <-dbGetQuery(connection, visit_nmix_q) %>% 
+  arrange(date) %>% 
+  select(site, date)
+
+
+#write_csv(nmix_raw_visits, here("data", "nmix_raw_visits.csv"))
+
+```
+
+## Visualize all VES Visits
+```{r}
+#nmix_raw_visits <- read_csv(here("data", "nmix_raw_visits.csv"))
+#nmix_raw_data <- read_csv(here("data", "nmix_raw_data.csv"))
+
+
+viz <- nmix_raw_visits %>% 
+  group_by(site) %>% 
+  summarise(n = n())
+
+ggplot(data = viz) +
+  geom_col(aes(x=site, y = n)) +
+  ggtitle("Raw Visits")
+
+```
+\newpage
+
+## Clean up species list with counts
+#### Filter for CMR focal species and summarize species counts. Then populate zeros for 3 focal species into the data set for visits when captures did not occur.
+```{r}
+#| output: false
+
+# filter for CMR focal species and summarize counts
+n_mix_mid_clean_up <- nmix_raw_data %>% 
+  filter(species_ves %in% c("pseudacris_crucifer", "rana_catesbeiana", 
+                                "rana_clamitans", "rana_pipiens")) %>% 
+  #mutate(capture_type = if_else(is.na(capture_type), "new", capture_type)) %>% 
+  group_by(date, site, species_ves) %>% 
+  summarise(n = sum(count)) %>% 
+  ungroup() 
+
+# populate zeros
+nmix_clean_up <- n_mix_mid_clean_up %>% 
+  full_join(nmix_raw_visits) %>%
+  complete(nesting(date, site), 
+           species_ves = unique(n_mix_mid_clean_up$species_ves), 
+           fill = list(n = 0)) %>% 
+  drop_na(species_ves) %>% 
+  filter(site == "rv_pond") # change for site
+
+
+
+
+```
+
+
+\newpage
+
+## rana_catesbeiana
+
+### N-Mixture Table formatting
+#### Filter data for `rana_catesbeiana`, tally the numbner of visits, pivot data frame into correct matrix form, and finally populate zeros into the NAs if sites were visited. 
+```{r}
+
+bull_frog_visits <- nmix_clean_up %>% 
+  select(site, date, species_ves, n) %>% 
+  filter(species_ves == "rana_clamitans") %>% 
+  select(!species_ves) %>% 
+  group_by(site) %>% 
+  mutate(n_visit = match(date, unique(date)),
+         n_visit = paste0("visit_", n_visit, sep = "")) %>% 
+  select(!date) %>% 
+  ungroup() %>%
+  pivot_wider(names_from = c("n_visit"), values_from = c("n")) %>% 
+  group_by(site) %>% 
+  mutate(across(contains("visit"), 
+                ~ifelse(is.na(.) &
+                          !is.na(lag(.)), 0, .)))
+
+
+
+
+```
+
+
+
+### Bullfrog static n-mixture models no covariates - 3 repeat sites
+```{r}
+
+bull_frog_nmixture_3_visits <- bull_frog_visits %>% 
+  ungroup() %>% 
+  select(!c(site))
+
+write_csv(bull_frog_nmixture_3_visits, here("tuttle_bullfrog.csv"))
+
+library(unmarked)
+
+# 3 Visits
+bull_frog_nmixture_3_visits <- read.csv("tuttle_bullfrog.csv")
+
+
+bf_umf_3 <- unmarkedFramePCount(y = bull_frog_nmixture_3_visits)
+
+summary(bf_umf_3)
+
+fm1_bf3 <- pcount( ~ 1 ~ 1, 
+               data = bf_umf_3, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_bf3)
+
+
+backTransform(fm1_bf3, "state")
+
+backTransform(fm1_bf3, type = "det")
+
+
+# 2 Visits
+bull_frog_nmixture_2_visits <- bull_frog_nmixture_3_visits %>% 
+  select(!c(visit_3))
+
+bf_umf_2 <- unmarkedFramePCount(y = bull_frog_nmixture_2_visits)
+
+summary(bf_umf_2)
+
+fm1_bf2 <- pcount( ~ 1 ~ 1, 
+               data = bf_umf_2, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_bf2)
+
+
+backTransform(fm1_bf2, "state")
+
+backTransform(fm1_bf2, type = "det")
+  
+
+
+```
+
+### Bull Frog RV
+
+```{r}
+
+first_bull_frog_nmixture_3_visits <- bull_frog_visits %>% 
+  ungroup() %>% 
+  select(!c(site, c(visit_4:visit_6)))
+
+second_bull_frog_unmarked_nxmixture <- bull_frog_visits %>% 
+  ungroup() %>% 
+  select(site, c(visit_4:visit_6)) %>% 
+  rename(visit_1 = visit_4,
+         visit_2 = visit_5,
+         visit_3 = visit_6) %>% 
+  ungroup() %>% 
+  select(!c(site))
+
+# bull_frog_nmixture_3_visits <- rbind(first_bull_frog_nmixture_3_visits, second_bull_frog_unmarked_nxmixture)
+# 
+# write_csv(bull_frog_nmixture_3_visits, here("rv_bullfrog.csv"))
+
+library(unmarked)
+
+# first survey period
+bull_frog_nmixture_3_visits <- read.csv("rv_bullfrog.csv")
+
+
+bf_umf_3_1 <- unmarkedFramePCount(y = first_bull_frog_nmixture_3_visits)
+
+summary(bf_umf_3_1)
+
+fm1_bf3_1 <- pcount( ~ 1 ~ 1, 
+               data = bf_umf_3_1, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_bf3_1)
+
+
+backTransform(fm1_bf3_1, "state")
+
+backTransform(fm1_bf3_1, type = "det")
+
+
+# second survye period
+bf_umf_3_2 <- unmarkedFramePCount(y = second_bull_frog_unmarked_nxmixture)
+
+summary(bf_umf_3_2)
+
+fm1_bf3_2 <- pcount( ~ 1 ~ 1, 
+               data = bf_umf_3_2, 
+               engine = "R",
+               control=list(trace=T, REPORT=5))
+
+summary(fm1_bf3_2)
+
+
+backTransform(fm1_bf3_2, "state")
+
+backTransform(fm1_bf3_2, type = "det")
+
+
+  
+
+
+```
+
+```{r}
+
+R <- 4 # number of sites
+J <- 3 # number of visits
+y <- matrix(c(
+   1,2,0,
+   0,0,0,
+   1,1,1,
+   2,2,1), nrow=R, ncol=J, byrow=TRUE)
+y
+```
+
